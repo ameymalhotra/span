@@ -27,9 +27,9 @@ struct CategoryBreakdownView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.m) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 Text("Categories · \(Format.dayTitle(day))")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Theme.label)
 
                 if report.categories.isEmpty {
@@ -43,7 +43,9 @@ struct CategoryBreakdownView: View {
                     }
                 }
             }
-            .padding(Theme.Space.xl)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.top, Theme.Space.page)
+            .padding(.bottom, Theme.Space.xxl)
         }
         .background(Theme.canvas)
     }

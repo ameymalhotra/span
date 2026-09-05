@@ -74,6 +74,9 @@ enum Theme {
         static let l: CGFloat = 16
         static let xl: CGFloat = 24
         static let xxl: CGFloat = 32
+        /// Inset around a pane's content. Deliberately larger than xxl:
+        /// content pressed against the toolbar reads as cramped.
+        static let page: CGFloat = 36
     }
 
     enum Radius {

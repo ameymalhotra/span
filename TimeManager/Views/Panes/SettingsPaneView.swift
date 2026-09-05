@@ -19,7 +19,7 @@ struct SettingsPaneView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxl) {
                 you
                 goals
                 categoriesSection
@@ -27,7 +27,9 @@ struct SettingsPaneView: View {
                 alerts
                 data
             }
-            .padding(Theme.Space.xl)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.top, Theme.Space.page)
+            .padding(.bottom, Theme.Space.xxl)
         }
         .background(Theme.canvas)
         .task {
@@ -192,7 +194,7 @@ struct SettingsPaneView: View {
             label(title, detail)
                 // Priority and a floor together: without them a wide trailing
                 // control takes the space it asks for and the text collapses.
-                .frame(minWidth: 200, alignment: .leading)
+                .frame(minWidth: 160, alignment: .leading)
                 .layoutPriority(1)
             Spacer(minLength: Theme.Space.s)
             control().fixedSize()

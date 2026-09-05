@@ -24,9 +24,9 @@ struct GuideView: View {
                 shortcuts
                 privacy
             }
-            .padding(.horizontal, Theme.Space.xl)
-            .padding(.top, Theme.Space.xxl)
-            .padding(.bottom, Theme.Space.xxl)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.top, Theme.Space.page)
+            .padding(.bottom, Theme.Space.page)
             .frame(maxWidth: 720, alignment: .leading)
         }
         .background(Theme.canvas)

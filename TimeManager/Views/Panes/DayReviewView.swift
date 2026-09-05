@@ -31,15 +31,17 @@ struct DayReviewView: View {
                 metrics
                 completedSessions
             }
-            .padding(Theme.Space.xl)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.top, Theme.Space.page)
+            .padding(.bottom, Theme.Space.xxl)
         }
         .background(Theme.canvas)
     }
 
     private var metrics: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(Format.dayTitle(day))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.label)
 
             HStack(spacing: Theme.Space.m) {
@@ -144,8 +146,8 @@ struct MetricTile: View {
                 .font(Theme.Font.micro)
                 .foregroundStyle(Theme.tertiaryLabel)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.Space.m)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .padding(Theme.Space.l)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
     }
 }

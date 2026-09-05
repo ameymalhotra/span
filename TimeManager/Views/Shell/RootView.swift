@@ -43,6 +43,10 @@ struct RootView: View {
     private static let sidebarWidth: CGFloat = 216
     private static let centreMinimum: CGFloat = 380
     private static let timelineMinimum: CGFloat = 300
+    /// Deliberately more than the sum of the pane minimums: an exact fit leaves
+    /// nothing for the divider and the panes overflow their slots.
+    private static let minimumWidth: CGFloat = 216 + 380 + 300 + 80
+    private static let minimumHeight: CGFloat = 620
     @State private var isStartingSession = false
     @State private var reflecting: WorkSession?
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
@@ -66,8 +70,8 @@ struct RootView: View {
         }
         // Deliberately more than the sum of the pane minimums: an exact fit
         // leaves nothing for the divider and the panes overflow their slots.
-        .frame(minWidth: Self.sidebarWidth + Self.centreMinimum + Self.timelineMinimum + 80,
-               minHeight: 620)
+        .frame(minWidth: Self.minimumWidth, minHeight: Self.minimumHeight)
+        .background(WindowMinimumSize(width: Self.minimumWidth, height: Self.minimumHeight))
         .task {
             guard !hasOnboarded else { return }
             isOnboarding = true
