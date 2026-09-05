@@ -240,28 +240,31 @@ struct DayTimelineView: View {
             .onTapGesture {
                 if let entry { editingEntry = entry } else { selection = placed.block }
             }
-            .gesture(moveGesture(for: entry))
-            // Anchored to the block rather than to the timeline, so the detail
-            // appears beside what was clicked and moves with it when scrolling.
-            .popover(isPresented: detailBinding(for: placed.block), arrowEdge: .trailing) {
-                TimelineBlockDetail(block: placed.block)
-            }
-            .popover(isPresented: editorBinding(for: entry), arrowEdge: .trailing) {
-                if let entry { TimeEntryEditor(entry: entry) }
+            // Simultaneous, so dragging to move does not swallow the tap that
+            // opens the block.
+            .simultaneousGesture(moveGesture(for: entry))
+            // Anchored to the block rather than to the timeline, so it appears
+            // beside what was clicked and travels with it when scrolling.
+            .popover(isPresented: popoverBinding(block: placed.block, entry: entry),
+                     arrowEdge: .trailing) {
+                if let entry {
+                    TimeEntryEditor(entry: entry)
+                } else {
+                    TimelineBlockDetail(block: placed.block)
+                }
             }
     }
 
-    private func detailBinding(for block: TimelineBlock) -> Binding<Bool> {
+    private func popoverBinding(block: TimelineBlock, entry: TimeEntry?) -> Binding<Bool> {
         Binding(
-            get: { selection?.id == block.id },
-            set: { if !$0 { selection = nil } }
-        )
-    }
-
-    private func editorBinding(for entry: TimeEntry?) -> Binding<Bool> {
-        Binding(
-            get: { entry != nil && editingEntry?.id == entry?.id },
-            set: { if !$0 { editingEntry = nil } }
+            get: {
+                if let entry { return editingEntry?.id == entry.id }
+                return selection?.id == block.id
+            },
+            set: { presented in
+                guard !presented else { return }
+                if entry == nil { selection = nil } else { editingEntry = nil }
+            }
         )
     }
 

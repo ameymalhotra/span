@@ -21,9 +21,9 @@ struct CardBlockView: View {
             if showsTitle {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: Theme.Space.xs) {
-                        Text(block.title)
+                        Text(block.title.isEmpty ? "Click to name" : block.title)
                             .font(Theme.Font.blockTitle)
-                            .foregroundStyle(Theme.label)
+                            .foregroundStyle(block.title.isEmpty ? Theme.tertiaryLabel : Theme.label)
                             .lineLimit(1)
                         Spacer(minLength: Theme.Space.xs)
                         if let rating = block.focusRating {
