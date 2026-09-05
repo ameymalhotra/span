@@ -93,7 +93,18 @@ final class AppModel {
 
     // MARK: - Session control
 
-    func startSession(title: String, category: String, minutes: Int) {
+    /// Starts a session, unless one is already running.
+    ///
+    /// The guard is not just belt-and-braces for the toolbar's disabled state.
+    /// A second session would take over `activeSession`, leaving the first
+    /// unreachable — nothing could pause or finish it — while both kept
+    /// accumulating against the day's total. The menu bar, the HUD and the
+    /// keyboard shortcut all reach this directly.
+    @discardableResult
+    func startSession(title: String, category: String, minutes: Int) -> WorkSession? {
+        if activeSession == nil { refreshActiveSession() }
+        guard activeSession == nil else { return nil }
+
         let session = WorkSession(title: title, category: category, plannedMinutes: minutes)
         session.beginSegment()
         context.insert(session)
@@ -101,6 +112,7 @@ final class AppModel {
         activeSession = session
         NotificationService.scheduleEndReminder(for: session)
         refreshStats()
+        return session
     }
 
     func pauseSession() {

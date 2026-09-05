@@ -64,27 +64,53 @@ struct AppModelTests {
         #expect(try sessions()[0].category.isEmpty)
     }
 
-    @Test("BUG: nothing stops a second session starting while one is running")
-    func startSessionDoesNotGuardAgainstASecond() throws {
-        model.startSession(title: "First", category: "Deep Work", minutes: 60)
-        model.startSession(title: "Second", category: "Admin", minutes: 30)
+    @Test("a second session cannot be started while one is running")
+    func startSessionRefusesASecond() throws {
+        let first = try #require(model.startSession(title: "First", category: "Deep Work", minutes: 60))
+        let second = model.startSession(title: "Second", category: "Admin", minutes: 30)
 
-        // Both are stored and both are active. Only the toolbar's `disabled`
-        // protects this invariant, so any other caller — the menu bar, the HUD,
-        // a future shortcut — can break it.
+        #expect(second == nil, "a second session was started on top of a running one")
+
         let stored = try sessions()
-        #expect(stored.count == 2)
-        #expect(stored.filter { $0.status == .active }.count == 2)
+        #expect(stored.count == 1)
+        #expect(stored[0].title == "First")
+        #expect(stored.filter { $0.status == .active }.count == 1)
+        #expect(model.activeSession?.id == first.id, "the running session is still the reachable one")
+    }
 
-        // The first is now unreachable: `activeSession` points at the second,
-        // so it can never be paused or finished from the UI, and recovery will
-        // not close it until it goes stale.
+    @Test("a session already running in the store also blocks a new one")
+    func startSessionRefusesWhenTheStoreAlreadyHasOne() throws {
+        // A fresh model has not seen the store yet: `activeSession` is nil even
+        // though one is running, which is the state after a relaunch.
+        Fixture.session(in: context, title: "Recovered", startedAt: Date.now, status: .active,
+                        segments: [(Date.now, nil)])
+        try context.save()
+
+        let started = model.startSession(title: "New", category: "Admin", minutes: 30)
+
+        #expect(started == nil)
+        #expect(try sessions().count == 1)
+        #expect(model.activeSession?.title == "Recovered")
+    }
+
+    @Test("a session can be started again once the first has finished")
+    func startSessionAllowedAfterFinishing() throws {
+        model.startSession(title: "First", category: "Deep Work", minutes: 60)
+        model.finishSession()
+
+        let second = model.startSession(title: "Second", category: "Admin", minutes: 30)
+        #expect(second != nil)
+        #expect(try sessions().count == 2)
         #expect(model.activeSession?.title == "Second")
+    }
 
-        // And it is double-counted while it runs.
-        let report = DayReport(day: Clock.dayStart, sessions: stored, entries: [], activity: [],
-                               now: Date.now.addingTimeInterval(600))
-        #expect(report.focusedTime > 600)
+    @Test("a paused session still blocks a new one")
+    func startSessionRefusedWhilePaused() throws {
+        model.startSession(title: "First", category: "Deep Work", minutes: 60)
+        model.pauseSession()
+
+        #expect(model.startSession(title: "Second", category: "Admin", minutes: 30) == nil)
+        #expect(try sessions().count == 1)
     }
 
     // MARK: - Pause, resume, finish
