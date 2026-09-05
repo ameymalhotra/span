@@ -61,13 +61,7 @@ struct StartSessionView: View {
                 }
 
                 Section("How long?") {
-                    Picker("Duration", selection: $minutes) {
-                        ForEach([25, 50, 75, 90], id: \.self) { value in
-                            Text("\(value)m").tag(value)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    DurationPicker(minutes: $minutes)
                 }
             }
             .formStyle(.grouped)

@@ -63,11 +63,8 @@ struct SettingsPaneView: View {
             Divider()
 
             row("Default session", detail: "Pre-selected when you start a new session.") {
-                Picker("", selection: $defaultSessionMinutes) {
-                    ForEach([25, 50, 75, 90], id: \.self) { Text("\($0)m").tag($0) }
-                }
-                .labelsHidden()
-                .frame(width: 110)
+                DurationPicker(minutes: $defaultSessionMinutes, showsSummary: false)
+                    .frame(width: 260)
             }
         }
     }
