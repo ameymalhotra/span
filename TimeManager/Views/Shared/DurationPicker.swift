@@ -6,7 +6,7 @@ struct DurationPicker: View {
     /// Shown under the field so the number has a sense of scale.
     var showsSummary = true
 
-    private static let presets = [25, 50, 75, 90]
+    private static let presets = [30, 60, 90, 120]
     private static let range = 1...600
 
     @State private var isCustom = false
@@ -16,7 +16,9 @@ struct DurationPicker: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: 2) {
                 ForEach(Self.presets, id: \.self) { preset in
-                    segment(label: "\(preset)m", selected: !isCustom && minutes == preset) {
+                    // Formatted rather than raw minutes, so 120 reads as "2h".
+                    segment(label: Format.compact(TimeInterval(preset * 60)),
+                            selected: !isCustom && minutes == preset) {
                         isCustom = false
                         minutes = preset
                     }

@@ -10,7 +10,7 @@ struct StartSessionView: View {
 
     @State private var title = ""
     @State private var category = "Deep Work"
-    @AppStorage("defaultSessionMinutes") private var minutes = 50
+    @AppStorage("defaultSessionMinutes") private var minutes = 60
 
     let onStart: (String, String, Int) -> Void
 

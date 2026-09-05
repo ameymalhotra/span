@@ -8,7 +8,7 @@ struct SettingsPaneView: View {
     @Environment(\.modelContext) private var context
 
     @AppStorage("dailyFocusTargetMinutes") private var targetMinutes = 300
-    @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 50
+    @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 60
     @AppStorage("idleThresholdMinutes") private var idleThresholdMinutes = 5
     @AppStorage("hud.visible") private var hudVisible = true
     @State private var notificationsEnabled = false

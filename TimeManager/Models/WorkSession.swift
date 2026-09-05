@@ -6,7 +6,7 @@ final class WorkSession {
     var id: UUID = UUID()
     var title: String = ""
     var category: String = "General"
-    var plannedMinutes: Int = 50
+    var plannedMinutes: Int = 60
     var startedAt: Date = Date.now
     var endedAt: Date?
     var pausedAt: Date?
