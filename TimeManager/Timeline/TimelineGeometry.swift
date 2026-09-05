@@ -59,7 +59,51 @@ struct LaidOutBlock: Identifiable {
     var id: String { block.id }
 }
 
+/// A block with its final on-screen rectangle.
+struct PlacedBlock: Identifiable {
+    let block: TimelineBlock
+    let lane: Int
+    let laneCount: Int
+    let y: CGFloat
+    let height: CGFloat
+
+    var id: String { block.id }
+}
+
 enum TimelineLayout {
+
+    /// Places blocks with a legible minimum height.
+    ///
+    /// A minimum height alone is not safe: two five-minute blocks six minutes
+    /// apart do not overlap in time, but at 24pt each they collide on screen —
+    /// which renders as two cards drawn over one another. Within each lane the
+    /// blocks are therefore cascaded: a block that would start above the
+    /// previous one's bottom is pushed down. Dense clusters drift slightly from
+    /// true time, which is the trade calendars make too, and the alternative is
+    /// illegible.
+    static func place(
+        _ blocks: [TimelineBlock],
+        in geometry: TimelineGeometry,
+        minimumHeight: CGFloat,
+        spacing: CGFloat = 2
+    ) -> [PlacedBlock] {
+        let laid = lanes(for: blocks)
+        var cursorByLane: [Int: CGFloat] = [:]
+        var placed: [PlacedBlock] = []
+
+        for item in laid.sorted(by: { $0.block.start < $1.block.start }) {
+            let top = geometry.y(for: item.block.start)
+            let natural = geometry.y(for: item.block.end) - top
+            let height = max(minimumHeight, natural)
+            let cursor = cursorByLane[item.lane] ?? -.greatestFiniteMagnitude
+            let y = max(top, cursor)
+            cursorByLane[item.lane] = y + height + spacing
+            placed.append(PlacedBlock(block: item.block, lane: item.lane,
+                                      laneCount: item.laneCount, y: y, height: height))
+        }
+        return placed
+    }
+
 
     /// Packs overlapping blocks into side-by-side columns, the way a calendar
     /// week view does.

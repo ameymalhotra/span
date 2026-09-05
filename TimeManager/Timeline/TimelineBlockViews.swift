@@ -1,33 +1,5 @@
 import SwiftUI
 
-/// A passively tracked span, drawn in the narrow rail beside the gutter.
-struct RibbonBlockView: View {
-    let block: TimelineBlock
-
-    var body: some View {
-        Group {
-            if block.kind == .idle {
-                // Away time is recessive but still solid: at a few points tall a
-                // dashed outline renders as scattered dots, not a block.
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Theme.tertiaryLabel.opacity(0.22))
-            } else {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(block.color.opacity(0.85))
-            }
-        }
-        .help(tooltip)
-    }
-
-    private var tooltip: String {
-        let span = "\(Format.timeOfDay(block.start)) – \(Format.timeOfDay(block.end))"
-        let detail = [block.title, Format.compact(block.duration), span]
-            .joined(separator: " · ")
-        guard let subtitle = block.subtitle else { return detail }
-        return "\(detail)\n\(subtitle)"
-    }
-}
-
 /// A session or a hand-made entry, drawn as a card in the wide lane.
 struct CardBlockView: View {
     let block: TimelineBlock
@@ -48,11 +20,12 @@ struct CardBlockView: View {
 
             if showsTitle {
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Space.xs) {
                         Text(block.title)
                             .font(Theme.Font.blockTitle)
                             .foregroundStyle(Theme.label)
                             .lineLimit(1)
+                        Spacer(minLength: Theme.Space.xs)
                         if let rating = block.focusRating {
                             FocusPips(rating: rating)
                         }

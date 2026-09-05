@@ -122,16 +122,23 @@ struct DayTimelineView: View {
 
                 creationLayer(laneX: laneX, laneWidth: laneWidth)
 
+                ActivityRail(blocks: ribbonBlocks, geometry: geometry)
+                    .frame(width: Self.railWidth, height: geometry.totalHeight)
+
+                // Hit targets only — the rail itself is painted as one band, so
+                // these are invisible and may overlap without showing it.
                 ForEach(ribbonBlocks) { block in
-                    let extent = geometry.extent(for: block, minimumHeight: 6)
-                    RibbonBlockView(block: block)
+                    let extent = geometry.extent(for: block, minimumHeight: 5)
+                    Color.clear
+                        .contentShape(Rectangle())
                         .frame(width: Self.railWidth, height: extent.height)
                         .offset(y: extent.y)
+                        .help(railTooltip(block))
                         .onTapGesture { selection = block }
                 }
 
-                ForEach(TimelineLayout.lanes(for: cardBlocks)) { laid in
-                    laneCard(laid, laneX: laneX, laneWidth: laneWidth)
+                ForEach(TimelineLayout.place(cardBlocks, in: geometry, minimumHeight: 26)) { placed in
+                    laneCard(placed, laneX: laneX, laneWidth: laneWidth)
                 }
 
                 if let draft {
@@ -214,20 +221,26 @@ struct DayTimelineView: View {
     // MARK: - Cards
 
     @ViewBuilder
-    private func laneCard(_ laid: LaidOutBlock, laneX: CGFloat, laneWidth: CGFloat) -> some View {
-        let extent = geometry.extent(for: laid.block, minimumHeight: 24)
-        let width = laneWidth / CGFloat(laid.laneCount)
-        let entry = entry(for: laid.block)
+    private func laneCard(_ placed: PlacedBlock, laneX: CGFloat, laneWidth: CGFloat) -> some View {
+        let width = laneWidth / CGFloat(placed.laneCount)
+        let entry = entry(for: placed.block)
 
-        CardBlockView(block: laid.block, height: extent.height)
-            .frame(width: max(24, width - 3), height: extent.height, alignment: .topLeading)
+        CardBlockView(block: placed.block, height: placed.height)
+            .frame(width: max(24, width - 3), height: placed.height, alignment: .topLeading)
             .overlay(alignment: .top) { resizeHandle(entry, edge: .top) }
             .overlay(alignment: .bottom) { resizeHandle(entry, edge: .bottom) }
-            .offset(x: laneX + width * CGFloat(laid.lane), y: extent.y)
+            .offset(x: laneX + width * CGFloat(placed.lane), y: placed.y)
             .onTapGesture {
-                if let entry { editingEntry = entry } else { selection = laid.block }
+                if let entry { editingEntry = entry } else { selection = placed.block }
             }
             .gesture(moveGesture(for: entry))
+    }
+
+    private func railTooltip(_ block: TimelineBlock) -> String {
+        var text = "\(block.title) · \(Format.compact(block.duration))\n"
+            + "\(Format.timeOfDay(block.start)) – \(Format.timeOfDay(block.end))"
+        if let subtitle = block.subtitle { text += "\n\(subtitle)" }
+        return text
     }
 
     private enum Edge { case top, bottom }
@@ -349,7 +362,7 @@ private struct TimelineGrid: View {
     let geometry: TimelineGeometry
 
     /// Half-hour rules stop earning their keep once the rows get short.
-    private var showsHalfHours: Bool { geometry.hourHeight >= 44 }
+    private var showsHalfHours: Bool { geometry.hourHeight >= 90 }
 
     var body: some View {
         // One Canvas rather than ~48 Divider views: the grid is decoration and
@@ -371,6 +384,34 @@ private struct TimelineGrid: View {
                 )
             }
         }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Passively tracked time, painted as one continuous band.
+///
+/// Drawn as separate rounded chips the rail became a column of disconnected
+/// pills — the tracker writes a record per app or title change, so most are only
+/// a few points tall. A contiguous band reads as the shape of the day instead,
+/// and short stretches are legible as stripes within it rather than as slivers
+/// floating on their own.
+private struct ActivityRail: View {
+    let blocks: [TimelineBlock]
+    let geometry: TimelineGeometry
+
+    var body: some View {
+        Canvas { context, size in
+            for block in blocks {
+                let top = geometry.y(for: block.start)
+                let height = max(1, geometry.y(for: block.end) - top)
+                let rect = CGRect(x: 0, y: top, width: size.width, height: height)
+                let colour: Color = block.kind == .idle
+                    ? Theme.tertiaryLabel.opacity(0.28)
+                    : block.color.opacity(0.9)
+                context.fill(Path(rect), with: .color(colour))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
         .allowsHitTesting(false)
     }
 }

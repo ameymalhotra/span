@@ -64,21 +64,32 @@ extension TimelineBlock {
                 focusRating: session.focusRating
             )]
         }
-        return session.segments
-            .sorted { $0.startedAt < $1.startedAt }
-            .enumerated()
-            .map { index, segment in
-                TimelineBlock(
-                    id: "session-\(session.id)-\(index)",
-                    kind: .session,
-                    title: session.title,
-                    subtitle: category,
-                    category: category,
-                    start: segment.startedAt,
-                    end: segment.endedAt ?? now,
-                    focusRating: session.focusRating
-                )
+        // Segments closer together than this are one block. Drawing a card per
+        // segment turns a session you paused briefly into two identical cards,
+        // which reads as a duplicate rather than as a pause.
+        let mergeGap: TimeInterval = 10 * 60
+        var runs: [(start: Date, end: Date)] = []
+        for segment in session.segments.sorted(by: { $0.startedAt < $1.startedAt }) {
+            let end = segment.endedAt ?? now
+            if var last = runs.last, segment.startedAt.timeIntervalSince(last.end) <= mergeGap {
+                last.end = max(last.end, end)
+                runs[runs.count - 1] = last
+            } else {
+                runs.append((segment.startedAt, end))
             }
+        }
+        return runs.enumerated().map { index, run in
+            TimelineBlock(
+                id: "session-\(session.id)-\(index)",
+                kind: .session,
+                title: session.title,
+                subtitle: category,
+                category: category,
+                start: run.start,
+                end: run.end,
+                focusRating: session.focusRating
+            )
+        }
     }
 
     static func block(for entry: TimeEntry) -> TimelineBlock {
