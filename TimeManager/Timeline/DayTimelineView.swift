@@ -352,17 +352,39 @@ struct DayTimelineView: View {
         .fixedSize()
     }
 
-    /// What the rail's colours mean, so the stripes do not have to be
-    /// interrogated one by one.
-    private var legendEntries: [CategoryTotal] {
-        var totals: [String: TimeInterval] = [:]
-        for block in ribbonBlocks where block.kind == .activity {
-            totals[block.category ?? block.title, default: 0] += block.duration
+    /// What the rail's colours mean, and what went into each one.
+    ///
+    /// Built from the records rather than the merged blocks, so it knows which
+    /// apps make up a category and can offer to re-file them.
+    private var legendEntries: [LegendEntry] {
+        var groups: [String: (total: TimeInterval, apps: [String: (name: String, total: TimeInterval)])] = [:]
+        for record in activity where !record.isIdle {
+            let key = grouping == .app
+                ? record.appName
+                : AppCategorizer.category(forBundleIdentifier: record.bundleIdentifier,
+                                          appName: record.appName)
+            var group = groups[key] ?? (0, [:])
+            group.total += record.duration
+            let bundle = record.bundleIdentifier ?? record.appName
+            var app = group.apps[bundle] ?? (record.appName, 0)
+            app.total += record.duration
+            group.apps[bundle] = app
+            groups[key] = group
         }
-        let grand = totals.values.reduce(0, +)
-        return totals
-            .map { CategoryTotal(name: $0.key, duration: $0.value,
-                                 fraction: grand > 0 ? $0.value / grand : 0) }
+        let grand = groups.values.reduce(0) { $0 + $1.total }
+        return groups
+            .map { name, value in
+                LegendEntry(
+                    name: name,
+                    duration: value.total,
+                    fraction: grand > 0 ? value.total / grand : 0,
+                    apps: value.apps
+                        .map { LegendEntry.AppShare(bundleIdentifier: $0.key,
+                                                    name: $0.value.name,
+                                                    duration: $0.value.total) }
+                        .sorted { $0.duration > $1.duration }
+                )
+            }
             .sorted { $0.duration > $1.duration }
     }
 
@@ -599,7 +621,7 @@ private struct TimelineGrid: View {
 
 /// Names the colours in the activity rail, with how long each took.
 private struct TimelineLegend: View {
-    let entries: [CategoryTotal]
+    let entries: [LegendEntry]
     @Binding var grouping: String
 
     /// How many fit before the row starts to crowd the timeline it labels.
@@ -622,18 +644,18 @@ private struct TimelineLegend: View {
                 ForEach(entries.prefix(Self.shown)) { entry in
                     swatch(entry)
                 }
-                if entries.count > Self.shown {
-                    // The overflow is a button rather than a dead label: the
-                    // whole point of a key is that nothing in it is unreachable.
-                    Button {
-                        isShowingAll = true
-                    } label: {
-                        Text("+\(entries.count - Self.shown) more")
-                            .font(Theme.Font.caption)
-                            .foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
+                // A button, not a label: the point of a key is that nothing in
+                // it is unreachable.
+                Button {
+                    isShowingAll = true
+                } label: {
+                    Text(entries.count > Self.shown
+                         ? "+\(entries.count - Self.shown) more"
+                         : "Details")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.accent)
                 }
+                .buttonStyle(.plain)
             }
 
             Spacer(minLength: Theme.Space.s)
@@ -660,11 +682,11 @@ private struct TimelineLegend: View {
         .frame(height: 34)
         .background(Theme.surface.opacity(0.5))
         .popover(isPresented: $isShowingAll) {
-            allEntries
+            LegendDetail(entries: entries, mode: mode)
         }
     }
 
-    private func swatch(_ entry: CategoryTotal) -> some View {
+    private func swatch(_ entry: LegendEntry) -> some View {
         HStack(spacing: Theme.Space.xs) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(entry.color)
@@ -680,29 +702,104 @@ private struct TimelineLegend: View {
         .fixedSize()
     }
 
-    private var allEntries: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text(mode == .category ? "Today by category" : "Today by app")
-                .font(.system(size: 13, weight: .semibold))
-            ForEach(entries) { entry in
-                HStack(spacing: Theme.Space.s) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(entry.color)
-                        .frame(width: 9, height: 9)
-                    Text(entry.name)
-                        .font(Theme.Font.body)
-                    Spacer(minLength: Theme.Space.l)
-                    Text(Format.compact(entry.duration))
-                        .font(Theme.Font.body.monospacedDigit())
-                    Text(Format.percent(entry.fraction))
-                        .font(Theme.Font.caption.monospacedDigit())
-                        .foregroundStyle(Theme.secondaryLabel)
-                        .frame(width: 40, alignment: .trailing)
+}
+
+/// The full key: every group, and — grouping by category — the apps filed into
+/// it, so a wrong answer can be corrected where it is noticed rather than
+/// somewhere else in Settings.
+private struct LegendDetail: View {
+    @Environment(\.modelContext) private var context
+    let entries: [LegendEntry]
+    let mode: TimelineGrouping
+
+    @State private var expanded: Set<String> = []
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text(mode == .category ? "Today by category" : "Today by app")
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.bottom, Theme.Space.xs)
+
+                ForEach(entries) { entry in
+                    row(entry)
+                    if expanded.contains(entry.name) {
+                        ForEach(entry.apps) { app in
+                            appRow(app)
+                        }
+                    }
+                }
+
+                if mode == .category {
+                    Text("Open a category to see which apps it holds, and move any that are filed wrongly.")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.tertiaryLabel)
+                        .padding(.top, Theme.Space.xs)
                 }
             }
+            .padding(Theme.Space.l)
         }
-        .padding(Theme.Space.l)
-        .frame(width: 300)
+        .frame(width: 340, height: min(460, CGFloat(entries.count) * 36 + 130))
+    }
+
+    private func row(_ entry: LegendEntry) -> some View {
+        Button {
+            guard mode == .category else { return }
+            if expanded.contains(entry.name) { expanded.remove(entry.name) }
+            else { expanded.insert(entry.name) }
+        } label: {
+            HStack(spacing: Theme.Space.s) {
+                if mode == .category {
+                    Image(systemName: expanded.contains(entry.name) ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(Theme.tertiaryLabel)
+                        .frame(width: 10)
+                }
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(entry.color)
+                    .frame(width: 9, height: 9)
+                Text(entry.name)
+                    .font(Theme.Font.body)
+                    .foregroundStyle(Theme.label)
+                Spacer(minLength: Theme.Space.m)
+                Text(Format.compact(entry.duration))
+                    .font(Theme.Font.body.monospacedDigit())
+                    .foregroundStyle(Theme.label)
+                Text(Format.percent(entry.fraction))
+                    .font(Theme.Font.caption.monospacedDigit())
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .frame(width: 40, alignment: .trailing)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(mode == .app)
+    }
+
+    private func appRow(_ app: LegendEntry.AppShare) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(app.name)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                Text(Format.compact(app.duration))
+                    .font(Theme.Font.micro.monospacedDigit())
+                    .foregroundStyle(Theme.tertiaryLabel)
+            }
+            Spacer(minLength: Theme.Space.s)
+            CategoryPicker(selection: Binding(
+                get: {
+                    AppCategorizer.category(forBundleIdentifier: app.bundleIdentifier,
+                                            appName: app.name)
+                },
+                set: {
+                    AppCategoryRule.assign($0, bundleIdentifier: app.bundleIdentifier,
+                                           appName: app.name, in: context)
+                }
+            ))
+            .frame(width: 168)
+        }
+        .padding(.leading, 22)
     }
 }
 

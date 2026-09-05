@@ -89,15 +89,8 @@ struct AppGroupingManager: View {
                                         appName: app.name)
             },
             set: { newValue in
-                if let existing = rules.first(where: { $0.bundleIdentifier == app.bundleIdentifier }) {
-                    existing.categoryName = newValue
-                } else {
-                    context.insert(AppCategoryRule(bundleIdentifier: app.bundleIdentifier,
-                                                   appName: app.name,
-                                                   categoryName: newValue))
-                }
-                try? context.save()
-                ModelStack.loadAppRules(in: context)
+                AppCategoryRule.assign(newValue, bundleIdentifier: app.bundleIdentifier,
+                                       appName: app.name, in: context)
             }
         )
     }
