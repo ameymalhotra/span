@@ -96,7 +96,7 @@ struct DayReport {
             totals[block.category ?? "Uncategorised", default: 0] += block.duration
         }
         for record in activity where !record.isIdle {
-            totals[record.categoryName ?? record.appName, default: 0] += record.duration
+            totals[ActivityRecord.currentCategory(for: record), default: 0] += record.duration
         }
         let grand = totals.values.reduce(0, +)
         self.categories = totals

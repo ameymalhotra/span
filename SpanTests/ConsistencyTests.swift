@@ -13,8 +13,8 @@ struct ConsistencyTests {
 
     init() throws { container = try TestStore.inMemory() }
 
-    @Test("BUG: re-filing an app does not re-file the time already recorded for it")
-    func rulesDoNotApplyRetroactively() throws {
+    @Test("re-filing an app also re-files the time already recorded for it")
+    func rulesApplyRetroactively() throws {
         AppCategorizer.updateOverrides([])
 
         // A morning in Safari, recorded while Safari was still "Browsing".
@@ -23,28 +23,71 @@ struct ConsistencyTests {
             from: Clock.at(hour: 9), to: Clock.at(hour: 11), categoryName: "Browsing")
         try context.save()
 
-        // The user then files Safari under Deep Work.
+        func breakdown() -> [String] {
+            DayReport(day: Clock.dayStart, sessions: [], entries: [],
+                      activity: [record], now: Clock.at(hour: 12)).categories.map(\.name)
+        }
+        #expect(breakdown() == ["Browsing"])
+
+        // The user files Safari under Deep Work.
         AppCategoryRule.assign("Deep Work", bundleIdentifier: "com.apple.Safari",
                                appName: "Safari", in: context)
 
-        // The categoriser now agrees...
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.apple.Safari", appName: "Safari")
-                == "Deep Work")
-
-        // ...and the timeline's own grouping, which re-reads the rules, follows.
         let merged = TimelineBlock.mergedActivityBlocks([record], grouping: .category)
         #expect(merged[0].title == "Deep Work")
-
-        // But the day's breakdown reads the category stored on the record, so
-        // it still reports the old one. The rail and the breakdown now disagree
-        // about the same two hours.
-        let report = DayReport(day: Clock.dayStart, sessions: [], entries: [],
-                               activity: [record], now: Clock.at(hour: 12))
-        #expect(report.categories.map(\.name) == ["Browsing"])
-        #expect(report.categories.first?.name != merged[0].title,
-                "the breakdown and the timeline disagree about this record")
+        #expect(breakdown() == ["Deep Work"], "the breakdown still reports the old category")
+        #expect(TimelineBlock.block(for: record).category == "Deep Work")
 
         AppCategorizer.updateOverrides([])
+    }
+
+    @Test("the timeline and the breakdown name a category the same way")
+    func timelineAndBreakdownAgree() throws {
+        AppCategorizer.updateOverrides([])
+        let records = [
+            Fixture.activity(in: context, appName: "Xcode", bundleIdentifier: "com.apple.dt.Xcode",
+                             from: Clock.at(hour: 9), to: Clock.at(hour: 10),
+                             categoryName: "something stale"),
+            Fixture.activity(in: context, appName: "Safari", bundleIdentifier: "com.apple.Safari",
+                             from: Clock.at(hour: 10), to: Clock.at(hour: 11),
+                             categoryName: "also stale"),
+        ]
+        try context.save()
+
+        let report = DayReport(day: Clock.dayStart, sessions: [], entries: [],
+                               activity: records, now: Clock.at(hour: 12))
+        let rail = TimelineBlock.mergedActivityBlocks(records, grouping: .category)
+
+        #expect(Set(report.categories.map(\.name)) == Set(rail.map(\.title)))
+        #expect(Set(report.categories.map(\.name)) == ["Building", "Browsing"])
+        AppCategorizer.updateOverrides([])
+    }
+
+    @Test("a record with no bundle identifier keeps the name it was filed under")
+    func recordsWithoutAnIdentifierKeepTheirStoredCategory() throws {
+        AppCategorizer.updateOverrides([])
+        let record = Fixture.activity(
+            in: context, appName: "Some Tool", bundleIdentifier: nil,
+            from: Clock.at(hour: 9), to: Clock.at(hour: 10), categoryName: "Admin")
+        try context.save()
+
+        // There is nothing to re-resolve from, so the stored answer stands.
+        #expect(ActivityRecord.currentCategory(for: record) == "Admin")
+        let report = DayReport(day: Clock.dayStart, sessions: [], entries: [],
+                               activity: [record], now: Clock.at(hour: 12))
+        #expect(report.categories.map(\.name) == ["Admin"])
+        AppCategorizer.updateOverrides([])
+    }
+
+    @Test("an idle record is still not a category")
+    func idleIsNeverCategorised() throws {
+        let away = Fixture.activity(in: context, appName: "Away", bundleIdentifier: nil,
+                                    from: Clock.at(hour: 9), to: Clock.at(hour: 10), isIdle: true)
+        try context.save()
+        #expect(TimelineBlock.block(for: away).category == "Away")
+        let report = DayReport(day: Clock.dayStart, sessions: [], entries: [],
+                               activity: [away], now: Clock.at(hour: 12))
+        #expect(report.categories.isEmpty)
     }
 
     @Test("the day's tracked total is unaffected by how it is grouped")

@@ -24,8 +24,13 @@ final class ActivityRecord {
     /// True when this span represents the user being away from the keyboard,
     /// so breaks can be rendered as gaps rather than as work.
     var isIdle: Bool = false
-    /// Resolved at write time so historical records keep the category they were
-    /// filed under even if the rules change later.
+    /// The category resolved when the record was written.
+    ///
+    /// A fallback rather than the answer: `currentCategory(for:)` re-resolves
+    /// from the rules in force now, so re-filing an app corrects the time
+    /// already recorded for it — which is the whole point of being able to
+    /// re-file one. This is what a record with no bundle identifier falls back
+    /// to, since there is nothing to re-resolve from.
     var categoryName: String?
 
     init(
@@ -50,4 +55,17 @@ final class ActivityRecord {
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
+
+    /// The category this record counts towards now.
+    ///
+    /// Every surface that groups tracked time goes through here, so the
+    /// timeline's rail, its legend and the day's breakdown cannot disagree
+    /// about which category an app's time belongs to.
+    static func currentCategory(for record: ActivityRecord) -> String {
+        guard let bundleIdentifier = record.bundleIdentifier, !bundleIdentifier.isEmpty else {
+            return record.categoryName ?? record.appName
+        }
+        return AppCategorizer.category(forBundleIdentifier: bundleIdentifier,
+                                       appName: record.appName)
+    }
 }

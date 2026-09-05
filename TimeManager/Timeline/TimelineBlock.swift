@@ -126,8 +126,7 @@ extension TimelineBlock {
             switch grouping {
             case .app: return record.appName
             case .category:
-                return AppCategorizer.category(forBundleIdentifier: record.bundleIdentifier,
-                                               appName: record.appName)
+                return ActivityRecord.currentCategory(for: record)
             }
         }
 
@@ -176,7 +175,7 @@ extension TimelineBlock {
             kind: record.isIdle ? .idle : .activity,
             title: record.isIdle ? "Away" : record.appName,
             subtitle: record.windowTitle ?? record.url,
-            category: record.categoryName ?? record.appName,
+            category: record.isIdle ? "Away" : ActivityRecord.currentCategory(for: record),
             start: record.startedAt,
             end: record.endedAt,
             focusRating: nil

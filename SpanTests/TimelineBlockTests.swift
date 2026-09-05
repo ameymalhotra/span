@@ -227,10 +227,20 @@ struct TimelineBlockTests {
         #expect(TimelineBlock.block(for: bare).subtitle == nil)
     }
 
-    @Test("a record with no category falls back to the app name")
+    @Test("an app the categoriser cannot place falls back to its own name")
     func activityCategoryFallback() {
-        let record = Fixture.activity(in: context, appName: "Ledger", categoryName: nil)
+        let record = Fixture.activity(in: context, appName: "Ledger",
+                                      bundleIdentifier: "com.example.ledger", categoryName: nil)
         #expect(TimelineBlock.block(for: record).category == "Ledger")
+    }
+
+    @Test("a block's category is resolved from the rules in force now")
+    func activityCategoryIsResolvedLive() {
+        // The stored name is stale; the live rules place Xcode under Building.
+        let record = Fixture.activity(in: context, appName: "Xcode",
+                                      bundleIdentifier: "com.apple.dt.Xcode",
+                                      categoryName: "something stale")
+        #expect(TimelineBlock.block(for: record).category == "Building")
     }
 
     // MARK: - mergedActivityBlocks
