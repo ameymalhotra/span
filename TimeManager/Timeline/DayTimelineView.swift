@@ -23,6 +23,7 @@ struct DayTimelineView: View {
     @State private var draft: DraftRange?
     @State private var dragOrigin: (start: Date, end: Date)?
     @State private var hoveredRail: TimelineBlock?
+    @State private var inspectorY: CGFloat = 0
 
     private static let gutterWidth: CGFloat = 52
     /// Wide enough to read as a continuous band of the day rather than a line
@@ -155,6 +156,19 @@ struct DayTimelineView: View {
                 if isToday {
                     NowIndicator(geometry: geometry)
                 }
+
+                if editingEntry != nil || selection != nil {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(width: proxy.size.width, height: geometry.totalHeight)
+                        .onTapGesture {
+                            editingEntry = nil
+                            selection = nil
+                        }
+                        .zIndex(9)
+                }
+
+                inspector(laneX: laneX, laneWidth: laneWidth, trackWidth: proxy.size.width)
             }
         }
     }
@@ -193,6 +207,8 @@ struct DayTimelineView: View {
         let entry = TimeEntry(title: "", category: "", startedAt: start, endedAt: end)
         context.insert(entry)
         try? context.save()
+        inspectorY = geometry.y(for: start)
+        selection = nil
         editingEntry = entry
     }
 
@@ -234,38 +250,60 @@ struct DayTimelineView: View {
 
         CardBlockView(block: placed.block, height: placed.height)
             .frame(width: max(24, width - 3), height: placed.height, alignment: .topLeading)
+            .contentShape(Rectangle())
             .overlay(alignment: .top) { resizeHandle(entry, edge: .top) }
             .overlay(alignment: .bottom) { resizeHandle(entry, edge: .bottom) }
             .offset(x: laneX + width * CGFloat(placed.lane), y: placed.y)
             .onTapGesture {
-                if let entry { editingEntry = entry } else { selection = placed.block }
+                inspectorY = placed.y
+                if let entry {
+                    selection = nil
+                    editingEntry = entry
+                } else {
+                    editingEntry = nil
+                    selection = placed.block
+                }
             }
             // Simultaneous, so dragging to move does not swallow the tap that
             // opens the block.
             .simultaneousGesture(moveGesture(for: entry))
-            // Anchored to the block rather than to the timeline, so it appears
-            // beside what was clicked and travels with it when scrolling.
-            .popover(isPresented: popoverBinding(block: placed.block, entry: entry),
-                     arrowEdge: .trailing) {
-                if let entry {
-                    TimeEntryEditor(entry: entry)
-                } else {
-                    TimelineBlockDetail(block: placed.block)
-                }
-            }
     }
 
-    private func popoverBinding(block: TimelineBlock, entry: TimeEntry?) -> Binding<Bool> {
-        Binding(
-            get: {
-                if let entry { return editingEntry?.id == entry.id }
-                return selection?.id == block.id
-            },
-            set: { presented in
-                guard !presented else { return }
-                if entry == nil { selection = nil } else { editingEntry = nil }
+    /// The detail or editor, drawn in the timeline beside the block it belongs
+    /// to.
+    ///
+    /// This was a popover, which is the obvious tool but an unreliable one
+    /// here: nested in a ScrollView inside a GeometryReader it anchored to the
+    /// pane rather than the block, and a view can only present one at a time,
+    /// so the detail and the editor cancelled each other out. An ordinary view
+    /// positioned in the same coordinate space as the blocks has neither
+    /// problem.
+    @ViewBuilder
+    private func inspector(laneX: CGFloat, laneWidth: CGFloat, trackWidth: CGFloat) -> some View {
+        if editingEntry != nil || selection != nil {
+            let panelWidth: CGFloat = 290
+            // Sits beside the lane where there is room, and tucks inside the
+            // track when the pane is narrow.
+            let x = min(max(laneX + Theme.Space.s, 0), max(0, trackWidth - panelWidth - 4))
+            let y = min(max(0, inspectorY - 8), max(0, geometry.totalHeight - 260))
+
+            Group {
+                if let entry = editingEntry {
+                    TimeEntryEditor(entry: entry) { editingEntry = nil }
+                } else if let block = selection {
+                    TimelineBlockDetail(block: block) { selection = nil }
+                }
             }
-        )
+            .frame(width: panelWidth, alignment: .topLeading)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.panel))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.panel)
+                    .strokeBorder(Theme.hairline, lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
+            .offset(x: x, y: y)
+            .zIndex(10)
+        }
     }
 
     /// A floating label for whatever the pointer is over in the rail.

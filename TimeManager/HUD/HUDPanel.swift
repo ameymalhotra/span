@@ -10,7 +10,7 @@ final class HUDPanel: NSPanel {
 
     init(rootView: some View) {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 46),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 40),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -34,9 +34,12 @@ final class HUDPanel: NSPanel {
         // the desktop rather than sitting inside the app's own surfaces.
         appearance = NSAppearance(named: .vibrantDark)
 
-        let hosting = NSHostingView(rootView: AnyView(rootView))
-        hosting.autoresizingMask = [.width, .height]
-        contentView = hosting
+        // A hosting *controller*, not a hosting view: the window then tracks the
+        // pill's fitting size, and the pill is only as wide as what it is
+        // currently showing (a running session's clock is wider than a day
+        // total). In a fixed-size window the capsule would instead stretch to
+        // whatever width was guessed here.
+        contentViewController = NSHostingController(rootView: AnyView(rootView))
     }
 
     // Never key, never main: no focus stealing.

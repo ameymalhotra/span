@@ -97,6 +97,7 @@ struct FocusPips: View {
 /// Popover shown when a block is clicked.
 struct TimelineBlockDetail: View {
     let block: TimelineBlock
+    let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -108,6 +109,11 @@ struct TimelineBlockDetail: View {
                 Text(kindLabel)
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.secondaryLabel)
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Theme.tertiaryLabel)
+                }
+                .buttonStyle(.plain)
             }
 
             if let subtitle = block.subtitle {
@@ -131,7 +137,7 @@ struct TimelineBlockDetail: View {
         }
         .font(Theme.Font.body)
         .padding(Theme.Space.l)
-        .frame(width: 280)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var kindLabel: String {

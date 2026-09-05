@@ -64,8 +64,13 @@ final class HUDController: NSObject, NSWindowDelegate {
 
     /// Anchored to `visibleFrame`, which already excludes the menu bar, so the
     /// offset is measured from just below it.
-    func reposition() {
-        guard let panel, let screen = targetScreen() else { return }
+    ///
+    /// `screen` defaults to whichever display the pointer is on. A caller that
+    /// is only re-anchoring the pill where it already sits passes its current
+    /// display instead — otherwise the pill would hop to the pointer every time
+    /// its contents changed width.
+    func reposition(on screen: NSScreen? = nil) {
+        guard let panel, let screen = screen ?? targetScreen() else { return }
         let frame = screen.visibleFrame
         let size = panel.frame.size
         let x = xFraction >= 0
@@ -83,6 +88,13 @@ final class HUDController: NSObject, NSWindowDelegate {
     }
 
     @objc private func screensChanged() { reposition() }
+
+    /// The pill's width follows its contents, and AppKit grows a window from its
+    /// bottom-left corner. Re-anchoring on every resize keeps the top edge
+    /// pinned under the menu bar and a centred pill centred.
+    func windowDidResize(_ notification: Notification) {
+        reposition(on: panel?.screen)
+    }
 
     // Position is stored as a fraction of the visible frame rather than as
     // absolute points, so it survives a resolution or display change.

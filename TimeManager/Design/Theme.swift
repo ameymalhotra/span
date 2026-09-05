@@ -25,6 +25,23 @@ enum Theme {
     /// The now-indicator. Deliberately the one hot colour in the timeline.
     static let now = Color.adaptive(light: 0xE0322A, dark: 0xFF544A)
 
+    /// The floating HUD's palette.
+    ///
+    /// Fixed rather than adaptive: the pill forces a dark appearance because it
+    /// floats over the desktop rather than sitting inside the app's surfaces,
+    /// so there is no light variant to author. It holds to the app's own two
+    /// colours — white at a few weights, teal for the live number — so the pill
+    /// reads as part of Time Manager rather than a second app parked on top.
+    enum HUD {
+        static let value = Color.white.opacity(0.92)
+        static let caption = Color.white.opacity(0.45)
+        /// The dark-appearance `accent`, stated outright since the HUD never
+        /// resolves against the light one.
+        static let accent = Color(rgbHex: 0x2FD3BC)
+        /// Dividers, the target ring's unfilled track, and the hairline border.
+        static let line = Color.white.opacity(0.16)
+    }
+
     // MARK: - Surfaces
 
     /// Window background behind the timeline and summary panes.

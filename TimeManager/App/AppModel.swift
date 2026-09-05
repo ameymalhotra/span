@@ -34,6 +34,13 @@ final class AppModel {
     private(set) var sinceBreakText: String = "--"
     private(set) var percentOfTargetText: String = "0%"
 
+    /// The numeric companion to `percentOfTargetText`, for the HUD's target
+    /// ring. Quantised to 1/200 of the sweep — a smaller step moves the ring by
+    /// less than a point — for the same reason the rest of this block is
+    /// pre-formatted: a tick that moves nothing on screen should invalidate
+    /// nothing.
+    private(set) var focusFraction: Double = 0
+
     /// Daily focus goal in minutes, used for the HUD's third stat.
     @ObservationIgnored
     @AppStorage("dailyFocusTargetMinutes") var dailyFocusTargetMinutes: Int = 300
@@ -180,7 +187,9 @@ final class AppModel {
         focusTodayText = Format.compact(focus)
 
         let target = TimeInterval(max(1, dailyFocusTargetMinutes) * 60)
-        percentOfTargetText = Format.percent(focus / target)
+        let fraction = focus / target
+        percentOfTargetText = Format.percent(fraction)
+        focusFraction = (fraction * 200).rounded(.down) / 200
 
         // Falls back to the start of the day's first tracked activity, so the
         // stat reads sensibly before the first break has happened.

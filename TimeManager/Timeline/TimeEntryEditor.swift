@@ -4,9 +4,9 @@ import SwiftUI
 /// Editor for a hand-made time block: what it was, and exactly when.
 struct TimeEntryEditor: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
 
     @Bindable var entry: TimeEntry
+    let onClose: () -> Void
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -40,7 +40,7 @@ struct TimeEntryEditor: View {
                 Button(role: .destructive) {
                     context.delete(entry)
                     try? context.save()
-                    dismiss()
+                    onClose()
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
@@ -54,7 +54,7 @@ struct TimeEntryEditor: View {
         }
         .font(Theme.Font.body)
         .padding(Theme.Space.l)
-        .frame(width: 300)
+        .frame(width: 290)
         .onAppear { titleFocused = true }
         .onChange(of: entry.startedAt) { _, _ in clampEnd() }
     }
@@ -73,6 +73,6 @@ struct TimeEntryEditor: View {
             entry.title = "Untitled block"
         }
         try? context.save()
-        dismiss()
+        onClose()
     }
 }

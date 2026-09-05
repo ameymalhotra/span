@@ -61,15 +61,15 @@ struct TimeManagerApp: App {
 /// Owns the pieces that have to exist outside the SwiftUI scene graph: the
 /// floating HUD panel, and the launch/termination hooks.
 ///
-/// Main-actor isolated, which also makes it `Sendable` — the KVO callback below
-/// hops back onto the main actor and would otherwise be sending a non-Sendable
-/// `self` across isolation domains.
+/// Main-actor isolated, which also makes it `Sendable` — the defaults observer
+/// below hops back onto the main actor and would otherwise be sending a
+/// non-Sendable `self` across isolation domains.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var model: AppModel?
     private var hud: HUDController?
-    private var hudObserver: NSKeyValueObservation?
+    private var hudObserver: NSObjectProtocol?
 
     func configure(with model: AppModel) {
         guard self.model == nil else { return }
@@ -82,15 +82,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The HUD is toggled from three places — settings, the status bar and
         // the pill's own menu — so all of them write one default and this
-        // observes it, rather than each one holding a reference to the panel.
-        hudObserver = UserDefaults.standard.observe(\.hudVisible, options: [.new]) { [weak self] _, _ in
+        // watches it, rather than each one holding a reference to the panel.
+        //
+        // The blanket change notification rather than KVO on the key: KVO
+        // against UserDefaults is keyed on the defaults key, and "hud.visible"
+        // is read as a key *path* — `hud`, then `visible` — so an observation
+        // of it is registered against a key nothing ever writes and never
+        // fires. That is why "Hide HUD" appeared to do nothing.
+        hudObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
             Task { @MainActor in self?.applyHUDVisibility() }
         }
     }
 
+    /// Ignores everything that is not an actual change, since the notification
+    /// above fires for every default the app writes — the HUD's own drag
+    /// position included — and `show()` is not free to call twice.
     private func applyHUDVisibility() {
+        guard let hud else { return }
         let wanted = UserDefaults.standard.object(forKey: "hud.visible") as? Bool ?? true
-        wanted ? hud?.show() : hud?.hide()
+        guard wanted != hud.isVisible else { return }
+        wanted ? hud.show() : hud.hide()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -100,9 +113,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Closing the window leaves the app running: it is still tracking, and the
     /// menu bar item and HUD are still doing their job.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
-}
-
-extension UserDefaults {
-    /// Key-path access for the KVO observation above.
-    @objc dynamic var hudVisible: Bool { bool(forKey: "hud.visible") }
 }
