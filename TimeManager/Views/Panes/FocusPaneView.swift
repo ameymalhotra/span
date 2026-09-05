@@ -11,6 +11,10 @@ struct FocusPaneView: View {
     @AppStorage("personalNote") private var personalNote = ""
     @AppStorage("dailyFocusTargetMinutes") private var targetMinutes = 300
     @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 60
+    /// Titles cleared from the pick-up list, stamped with the day they were
+    /// cleared. Dismissing is a "not today" rather than a permanent removal, so
+    /// the list comes back tomorrow without the user having to undo anything.
+    @AppStorage("pickUpDismissed") private var dismissedRaw = ""
 
     @Query private var todaySessions: [WorkSession]
     @Query private var recentSessions: [WorkSession]
@@ -42,18 +46,45 @@ struct FocusPaneView: View {
         return min(1, focusToday / target)
     }
 
-    /// Distinct recent pieces of work, most recent first.
+    /// Distinct recent pieces of work, most recent first, minus anything
+    /// dismissed today.
     private var pickUpAgain: [WorkSession] {
+        let hidden = dismissedToday
         var seen: Set<String> = []
         var result: [WorkSession] = []
         for session in recentSessions where session.status == .completed {
             let key = session.title.trimmingCharacters(in: .whitespaces).lowercased()
-            guard !key.isEmpty, !seen.contains(key) else { continue }
+            guard !key.isEmpty, !seen.contains(key), !hidden.contains(key) else { continue }
             seen.insert(key)
             result.append(session)
             if result.count == 3 { break }
         }
         return result
+    }
+
+    private static let dayStamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    /// Stored as "yyyy-MM-dd\ntitle\ntitle". A stamp from any other day is
+    /// treated as empty, which is what makes the list reset overnight without
+    /// anything having to run at midnight.
+    private var dismissedToday: Set<String> {
+        let parts = dismissedRaw.components(separatedBy: "\n")
+        guard let stamp = parts.first,
+              stamp == Self.dayStamp.string(from: .now) else { return [] }
+        return Set(parts.dropFirst())
+    }
+
+    private func dismiss(_ session: WorkSession) {
+        let key = session.title.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !key.isEmpty else { return }
+        var titles = dismissedToday
+        titles.insert(key)
+        dismissedRaw = ([Self.dayStamp.string(from: .now)] + titles.sorted())
+            .joined(separator: "\n")
     }
 
     var body: some View {
@@ -107,11 +138,19 @@ struct FocusPaneView: View {
 
             if !pickUpAgain.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    Text("Pick up again")
-                        .font(Theme.Font.sectionHeader)
-                        .tracking(0.5)
-                        .textCase(.uppercase)
-                        .foregroundStyle(Theme.tertiaryLabel)
+                    HStack(spacing: Theme.Space.xs) {
+                        Text("Pick up again")
+                            .font(Theme.Font.sectionHeader)
+                            .tracking(0.5)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Theme.tertiaryLabel)
+                        Spacer()
+                        if !dismissedToday.isEmpty {
+                            Button("Reset") { dismissedRaw = "" }
+                                .buttonStyle(.link)
+                                .font(Theme.Font.micro)
+                        }
+                    }
                     ForEach(pickUpAgain) { session in
                         resumeRow(session)
                     }
@@ -170,33 +209,45 @@ struct FocusPaneView: View {
         }
     }
 
-    /// One tap starts the same work again, at the default length.
+    /// One tap starts the same work again; the cross clears it for today.
     private func resumeRow(_ session: WorkSession) -> some View {
-        Button {
-            model.startSession(title: session.title,
-                               category: session.category,
-                               minutes: defaultSessionMinutes)
-        } label: {
-            HStack(spacing: Theme.Space.s) {
-                Circle()
-                    .fill(CategoryPalette.color(for: session.category))
-                    .frame(width: 8, height: 8)
-                Text(session.title)
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.label)
-                    .lineLimit(1)
-                Spacer(minLength: Theme.Space.s)
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 10))
+        HStack(spacing: Theme.Space.s) {
+            Button {
+                model.startSession(title: session.title,
+                                   category: session.category,
+                                   minutes: defaultSessionMinutes)
+            } label: {
+                HStack(spacing: Theme.Space.s) {
+                    Circle()
+                        .fill(CategoryPalette.color(for: session.category))
+                        .frame(width: 8, height: 8)
+                    Text(session.title)
+                        .font(Theme.Font.body)
+                        .foregroundStyle(Theme.label)
+                        .lineLimit(1)
+                    Spacer(minLength: Theme.Space.s)
+                    Image(systemName: "arrow.counterclockwise")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.tertiaryLabel)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Start this again for \(Format.compact(TimeInterval(defaultSessionMinutes * 60)))")
+
+            Button {
+                dismiss(session)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Theme.tertiaryLabel)
             }
-            .padding(.horizontal, Theme.Space.m)
-            .padding(.vertical, Theme.Space.s)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help("Not today — back tomorrow")
         }
-        .buttonStyle(.plain)
-        .help("Start this again for \(Format.compact(TimeInterval(defaultSessionMinutes * 60)))")
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
     }
 
     // MARK: - Running

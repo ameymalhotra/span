@@ -5,6 +5,9 @@ import SwiftUI
 struct DayReviewView: View {
     let day: Date
 
+    @Environment(\.modelContext) private var context
+    @State private var editing: WorkSession?
+
     @Query private var sessions: [WorkSession]
     @Query private var entries: [TimeEntry]
     @Query private var activity: [ActivityRecord]
@@ -40,6 +43,10 @@ struct DayReviewView: View {
             }
         }
         .background(Theme.canvas)
+        .sheet(item: $editing) { session in
+            SessionEditor(session: session) { editing = nil }
+                .padding(.vertical, Theme.Space.s)
+        }
     }
 
     private var metrics: some View {
@@ -83,6 +90,15 @@ struct DayReviewView: View {
             } else {
                 ForEach(completed) { session in
                     SessionRow(session: session)
+                        .onTapGesture { editing = session }
+                        .contextMenu {
+                            Button("Edit…") { editing = session }
+                            Button("Delete", role: .destructive) {
+                                NotificationService.cancelReminder(for: session)
+                                context.delete(session)
+                                try? context.save()
+                            }
+                        }
                 }
             }
         }

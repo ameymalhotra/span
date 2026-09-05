@@ -20,6 +20,7 @@ struct DayTimelineView: View {
 
     @State private var selection: TimelineBlock?
     @State private var editingEntry: TimeEntry?
+    @State private var editingSession: WorkSession?
     @State private var draft: DraftRange?
     @State private var dragOrigin: (start: Date, end: Date)?
     @State private var hoveredRail: TimelineBlock?
@@ -163,12 +164,13 @@ struct DayTimelineView: View {
                     NowIndicator(geometry: geometry)
                 }
 
-                if editingEntry != nil || selection != nil {
+                if editingEntry != nil || editingSession != nil || selection != nil {
                     Color.clear
                         .contentShape(Rectangle())
                         .frame(width: proxy.size.width, height: geometry.totalHeight)
                         .onTapGesture {
                             editingEntry = nil
+                            editingSession = nil
                             selection = nil
                         }
                         .zIndex(9)
@@ -277,11 +279,14 @@ struct DayTimelineView: View {
             .accessibilityIdentifier("timeline.card.\(placed.block.id)")
             .onTapGesture {
                 inspectorY = placed.y
+                selection = nil
+                editingEntry = nil
+                editingSession = nil
                 if let entry {
-                    selection = nil
                     editingEntry = entry
+                } else if let session = session(for: placed.block) {
+                    editingSession = session
                 } else {
-                    editingEntry = nil
                     selection = placed.block
                 }
             }
@@ -299,8 +304,8 @@ struct DayTimelineView: View {
     /// problem.
     @ViewBuilder
     private func inspector(laneX: CGFloat, laneWidth: CGFloat, trackWidth: CGFloat) -> some View {
-        if editingEntry != nil || selection != nil {
-            let panelWidth: CGFloat = 290
+        if editingEntry != nil || editingSession != nil || selection != nil {
+            let panelWidth: CGFloat = 300
             // Sits beside the lane where there is room, and tucks inside the
             // track when the pane is narrow.
             let x = min(max(laneX + Theme.Space.s, 0), max(0, trackWidth - panelWidth - 4))
@@ -309,6 +314,8 @@ struct DayTimelineView: View {
             Group {
                 if let entry = editingEntry {
                     TimeEntryEditor(entry: entry) { editingEntry = nil }
+                } else if let session = editingSession {
+                    SessionEditor(session: session) { editingSession = nil }
                 } else if let block = selection {
                     TimelineBlockDetail(block: block) { selection = nil }
                 }
