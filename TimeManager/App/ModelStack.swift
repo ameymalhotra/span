@@ -53,9 +53,9 @@ enum ModelStack {
         let directory = storeDirectoryOverride
             ?? FileManager.default
                 .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("TimeManager", isDirectory: true)
+                .appendingPathComponent("Span", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("TimeManager.store")
+        return directory.appendingPathComponent("Span.store")
     }
 
     /// Earlier builds used the default `ModelConfiguration`, which writes to
@@ -68,11 +68,18 @@ enum ModelStack {
         // adopt, and adopting one would drag real data into it.
         guard storeDirectoryOverride == nil else { return }
         let manager = FileManager.default
-        let legacy = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("default.store")
+        let root = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let target = storeURL()
-        guard manager.fileExists(atPath: legacy.path),
-              !manager.fileExists(atPath: target.path) else { return }
+        guard !manager.fileExists(atPath: target.path) else { return }
+
+        // Two earlier homes: the shared Application Support root, and a folder
+        // named after the app before it was called Span.
+        let candidates = [
+            root.appendingPathComponent("TimeManager/TimeManager.store"),
+            root.appendingPathComponent("default.store"),
+        ]
+        guard let legacy = candidates.first(where: { manager.fileExists(atPath: $0.path) })
+        else { return }
 
         for suffix in storeSuffixes {
             let from = URL(fileURLWithPath: legacy.path + suffix)
@@ -80,6 +87,54 @@ enum ModelStack {
             guard manager.fileExists(atPath: from.path) else { continue }
             try? manager.moveItem(at: from, to: to)
         }
+        // Leave nothing behind that looks like live data.
+        try? manager.removeItem(at: root.appendingPathComponent("TimeManager"))
+    }
+
+    // MARK: - Clearing data
+
+    /// Every preference Span writes. Listed rather than wiping the domain, so a
+    /// reset cannot take out anything the system keeps alongside them.
+    static let preferenceKeys = [
+        "userName", "personalNote", "dailyFocusTargetMinutes", "defaultSessionMinutes",
+        "idleThresholdMinutes", "hud.visible", "hud.xFraction", "hud.topOffset",
+        "hasOnboarded", "hasSeenGuide", "timeline.hourHeight", "timelineGrouping",
+        "pickUpDismissed",
+    ]
+
+    /// Deletes tracked application activity, optionally only today's.
+    @MainActor
+    static func deleteActivity(in context: ModelContext, onlyToday: Bool) {
+        if onlyToday {
+            let dayStart = Calendar.current.startOfDay(for: .now)
+            try? context.delete(model: ActivityRecord.self,
+                                where: #Predicate { $0.startedAt >= dayStart })
+        } else {
+            try? context.delete(model: ActivityRecord.self)
+        }
+        try? context.save()
+    }
+
+    /// Removes everything Span has recorded and returns it to a first run.
+    ///
+    /// Categories are re-seeded rather than left empty, because an app with no
+    /// categories cannot start a session.
+    @MainActor
+    static func resetEverything(in context: ModelContext) {
+        try? context.delete(model: ActivityRecord.self)
+        try? context.delete(model: TimeEntry.self)
+        try? context.delete(model: SessionSegment.self)
+        try? context.delete(model: WorkSession.self)
+        try? context.delete(model: AppCategoryRule.self)
+        try? context.delete(model: TimeCategory.self)
+        try? context.save()
+
+        for key in preferenceKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        AppCategorizer.updateOverrides([])
+        seedCategoriesIfNeeded(in: context)
     }
 
     /// Creates the starting categories the first time the app runs. One per

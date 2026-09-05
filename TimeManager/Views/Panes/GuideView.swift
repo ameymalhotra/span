@@ -157,7 +157,9 @@ struct GuideView: View {
 
     private var privacy: some View {
         card("Where your data lives", nil) {
-            para("Everything stays in a single file on this Mac, under Application Support. There is no account, no sync and no network connection — nothing is uploaded, because there is nowhere for it to go.")
+            para("Everything stays in a single file on this Mac, under Application Support. There is no account and no sync; nothing you record is ever uploaded.")
+            para("Span makes exactly one network request: once a day it asks GitHub whether a newer version has been released. It sends nothing but the request, and you can switch it off in Settings.")
+            para("Settings also has the way out — delete the tracked activity on its own, or reset Span entirely and start over.")
         }
     }
 

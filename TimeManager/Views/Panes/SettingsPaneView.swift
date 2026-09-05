@@ -13,6 +13,9 @@ struct SettingsPaneView: View {
     @AppStorage("hud.visible") private var hudVisible = true
     @AppStorage("userName") private var userName = ""
     @AppStorage("personalNote") private var personalNote = ""
+    @AppStorage("update.checkAutomatically") private var checksForUpdates = true
+    @State private var isConfirmingActivityDelete = false
+    @State private var isConfirmingReset = false
     @State private var notificationsEnabled = false
 
     private static let targets = [120, 180, 240, 300, 360, 420, 480]
@@ -29,6 +32,7 @@ struct SettingsPaneView: View {
                 appsSection
                 tracking
                 alerts
+                updates
                 data
             }
                 .padding(.horizontal, Theme.Space.page)
@@ -179,10 +183,89 @@ struct SettingsPaneView: View {
         }
     }
 
+    private var updates: some View {
+        section("Updates") {
+            row("Check for updates", detail: "Asks GitHub once a day whether a newer version has been released. This is the only network request Span makes, and it sends nothing but the request.") {
+                Toggle("", isOn: $checksForUpdates)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            Divider()
+
+            HStack(spacing: Theme.Space.m) {
+                updateStatus
+                Spacer()
+                Button("Check now") {
+                    Task { await model.updates.check() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var updateStatus: some View {
+        switch model.updates.state {
+        case .idle:
+            Text("Version \(model.updates.currentVersion)")
+                .foregroundStyle(Theme.secondaryLabel)
+        case .checking:
+            Text("Checking…").foregroundStyle(Theme.secondaryLabel)
+        case .upToDate:
+            Label("Version \(model.updates.currentVersion) is the latest",
+                  systemImage: "checkmark.circle.fill")
+                .foregroundStyle(Theme.secondaryLabel)
+        case .failed:
+            Text("Could not reach GitHub — Span works fine without it")
+                .foregroundStyle(Theme.tertiaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        case .available(let version, let url):
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Version \(version) is available")
+                    .foregroundStyle(Theme.label)
+                Link("Open the release page", destination: url)
+                    .font(Theme.Font.caption)
+            }
+        }
+    }
+
     private var data: some View {
         section("Your data") {
-            row("Storage", detail: "Kept in one file on this Mac. No account, no sync, nothing leaves the machine.") {
+            row("Storage",
+                detail: "One file on this Mac, in Application Support. No account, no sync — the only thing Span sends anywhere is the update check above.") {
                 EmptyView()
+            }
+
+            Divider()
+
+            row("Tracked activity",
+                detail: "Removes the record of which apps were frontmost. Your sessions, blocks and categories are left alone.") {
+                Button("Delete…") { isConfirmingActivityDelete = true }
+            }
+            .confirmationDialog("Delete all tracked activity?",
+                                isPresented: $isConfirmingActivityDelete) {
+                Button("Delete activity", role: .destructive) {
+                    model.deleteActivity(onlyToday: false)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The timeline's activity rail will be empty. Sessions and blocks are not affected. This cannot be undone.")
+            }
+
+            Divider()
+
+            row("Reset Span",
+                detail: "Erases everything — sessions, blocks, categories, app rules and every preference — and starts the setup questions again.") {
+                Button("Reset…", role: .destructive) { isConfirmingReset = true }
+            }
+            .confirmationDialog("Reset Span completely?",
+                                isPresented: $isConfirmingReset) {
+                Button("Erase everything", role: .destructive) {
+                    model.resetEverything()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Every session, block, category and preference will be removed and Span will start as if freshly installed. This cannot be undone.")
             }
         }
     }

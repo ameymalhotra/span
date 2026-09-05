@@ -7,8 +7,9 @@ sessions you start deliberately, the blocks you write down yourself, and what
 your Mac was doing while you worked — and then asks you how much of it was
 genuinely work.
 
-Everything stays on your machine. There is no account, no sync, and no network
-connection.
+Everything you record stays on your machine. There is no account and no sync.
+Span makes one network request — a daily check for a new version — which you
+can switch off.
 
 ---
 
@@ -142,11 +143,17 @@ separately) — switchable from the legend.
 One file, on your Mac:
 
 ```
-~/Library/Application Support/TimeManager/TimeManager.store
+~/Library/Application Support/Span/Span.store
 ```
 
-To start over, delete that folder. Nothing is uploaded, because there is
-nowhere for it to go.
+Nothing you record is ever uploaded. **Settings → Your data** can delete the
+tracked activity on its own, or reset Span entirely — erasing every session,
+block, category and preference and starting the setup questions again. Deleting
+the folder above does the same thing by hand.
+
+The one thing Span sends anywhere is a daily check against the GitHub releases
+API to see whether a newer version exists. It transmits nothing but the request,
+and **Settings → Updates** turns it off.
 
 Because window-title capture needs Accessibility, Span is deliberately **not**
 sandboxed, and so cannot ship on the Mac App Store.

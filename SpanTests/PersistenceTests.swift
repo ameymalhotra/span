@@ -347,16 +347,16 @@ struct PersistenceTests {
     func storeURLRespectsOverride() {
         let url = ModelStack.storeURL()
         let real = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("TimeManager", isDirectory: true)
-            .appendingPathComponent("TimeManager.store")
+            .appendingPathComponent("Span", isDirectory: true)
+            .appendingPathComponent("Span.store")
         #expect(url != real, "tests must never open the real store")
-        #expect(url.lastPathComponent == "TimeManager.store")
+        #expect(url.lastPathComponent == "Span.store")
     }
 
     @Test("a corrupt store is quarantined rather than bricking launch")
     func corruptStoreIsQuarantined() throws {
         try TestStore.withTemporaryDirectory { directory in
-            let url = directory.appendingPathComponent("TimeManager.store")
+            let url = directory.appendingPathComponent("Span.store")
             try Data("this is not a database".utf8).write(to: url)
 
             setenv(ModelStack.storeDirectoryOverrideKey, directory.path, 1)

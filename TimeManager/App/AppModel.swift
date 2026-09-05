@@ -16,6 +16,7 @@ final class AppModel {
 
     let tracker: ActivityTracker
     let accessibility = AccessibilityPermission()
+    let updates = UpdateChecker()
 
     /// The day the main window is showing.
     var selectedDate: Date = Calendar.current.startOfDay(for: .now)
@@ -25,6 +26,9 @@ final class AppModel {
     /// A block just created from the toolbar, waiting for the timeline to open
     /// its editor.
     var pendingBlockEdit: TimeEntry?
+
+    /// Set after a reset so the window can offer the first-run questions again.
+    var needsOnboarding = false
 
     /// A session that has just finished and is owed a review.
     ///
@@ -75,6 +79,7 @@ final class AppModel {
         refreshActiveSession()
         tracker.start()
         retune()
+        Task { await updates.checkIfDue() }
     }
 
     func stop() {
@@ -96,6 +101,31 @@ final class AppModel {
                 try? await Task.sleep(for: interval)
             }
         }
+    }
+
+    /// Clears tracked activity, optionally only today's.
+    func deleteActivity(onlyToday: Bool) {
+        // The tracker holds an unwritten span; pausing flushes it first so it
+        // cannot reappear immediately after the delete.
+        let wasPaused = tracker.isPaused
+        tracker.isPaused = true
+        ModelStack.deleteActivity(in: context, onlyToday: onlyToday)
+        tracker.isPaused = wasPaused
+        refreshStats()
+    }
+
+    /// Returns Span to a first run: nothing recorded, no preferences.
+    func resetEverything() {
+        let wasPaused = tracker.isPaused
+        tracker.isPaused = true
+        if let session = activeSession {
+            NotificationService.cancelReminder(for: session)
+        }
+        activeSession = nil
+        ModelStack.resetEverything(in: context)
+        tracker.isPaused = wasPaused
+        refreshStats()
+        needsOnboarding = true
     }
 
     // MARK: - Session control

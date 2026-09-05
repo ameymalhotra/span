@@ -76,6 +76,12 @@ struct RootView: View {
             guard !hasOnboarded else { return }
             isOnboarding = true
         }
+        .onChange(of: model.needsOnboarding) { _, needed in
+            guard needed else { return }
+            model.needsOnboarding = false
+            destination = .focus
+            isOnboarding = true
+        }
         .sheet(isPresented: $isOnboarding) {
             OnboardingView { openGuide in
                 hasOnboarded = true
