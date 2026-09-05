@@ -10,6 +10,14 @@ enum NotificationService {
         }
     }
 
+    /// Whether the user has already granted permission, so settings can show
+    /// the real state instead of an optimistic toggle.
+    static func isAuthorized() async -> Bool {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        return settings.authorizationStatus == .authorized
+            || settings.authorizationStatus == .provisional
+    }
+
     static func scheduleEndReminder(for session: WorkSession) {
         let seconds = max(1, session.remaining())
         let content = UNMutableNotificationContent()

@@ -1,0 +1,174 @@
+import AppKit
+import Foundation
+import Observation
+import SwiftData
+import SwiftUI
+
+/// The single source of truth shared by the main window, the menu bar item and
+/// the floating HUD.
+///
+/// All three used to be able to compute their own totals, which meant they
+/// could disagree about the same day. They now read these values, so the number
+/// in the menu bar is by construction the number in the window.
+@MainActor
+@Observable
+final class AppModel {
+
+    let tracker: ActivityTracker
+    let accessibility = AccessibilityPermission()
+
+    /// The day the main window is showing.
+    var selectedDate: Date = Calendar.current.startOfDay(for: .now)
+
+    private(set) var activeSession: WorkSession?
+
+    // Pre-formatted so a tick that doesn't change the displayed text doesn't
+    // invalidate any view. Publishing a `Date` would re-render every second
+    // regardless of whether anything visibly moved.
+    private(set) var sessionClock: String = "00:00"
+    private(set) var focusTodayText: String = "0m"
+    private(set) var sinceBreakText: String = "--"
+    private(set) var percentOfTargetText: String = "0%"
+
+    /// Daily focus goal in minutes, used for the HUD's third stat.
+    @ObservationIgnored
+    @AppStorage("dailyFocusTargetMinutes") var dailyFocusTargetMinutes: Int = 300
+
+    private let context: ModelContext
+    private var loop: Task<Void, Never>?
+    /// Surfaces that need a one-second clock. The tick slows to 15s when none
+    /// are on screen, which is most of the time.
+    private var fastConsumers = 0
+
+    init(container: ModelContainer) {
+        // Deliberately the container's main context, the same one `@Query`
+        // reads from. A private context would need its changes merged back
+        // before any view noticed a session had started.
+        self.context = container.mainContext
+        self.tracker = ActivityTracker(context: context)
+    }
+
+    // MARK: - Lifecycle
+
+    func start() {
+        ModelStack.recoverStaleSessions(in: context)
+        refreshActiveSession()
+        tracker.start()
+        retune()
+    }
+
+    func stop() {
+        loop?.cancel()
+        loop = nil
+        tracker.stop()
+    }
+
+    /// Views that show a running clock call this while visible.
+    func beginFastUpdates() { fastConsumers += 1; retune() }
+    func endFastUpdates() { fastConsumers = max(0, fastConsumers - 1); retune() }
+
+    private func retune() {
+        loop?.cancel()
+        let interval: Duration = fastConsumers > 0 ? .seconds(1) : .seconds(15)
+        loop = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.refreshStats()
+                try? await Task.sleep(for: interval)
+            }
+        }
+    }
+
+    // MARK: - Session control
+
+    func startSession(title: String, category: String, minutes: Int) {
+        let session = WorkSession(title: title, category: category, plannedMinutes: minutes)
+        session.beginSegment()
+        context.insert(session)
+        save()
+        activeSession = session
+        NotificationService.scheduleEndReminder(for: session)
+        refreshStats()
+    }
+
+    func pauseSession() {
+        guard let activeSession else { return }
+        activeSession.pause()
+        NotificationService.cancelReminder(for: activeSession)
+        save()
+        refreshStats()
+    }
+
+    func resumeSession() {
+        guard let activeSession else { return }
+        activeSession.resume()
+        NotificationService.scheduleEndReminder(for: activeSession)
+        save()
+        refreshStats()
+    }
+
+    /// Finishes the session and hands it back so the caller can offer the
+    /// reflection sheet.
+    @discardableResult
+    func finishSession() -> WorkSession? {
+        guard let session = activeSession else { return nil }
+        NotificationService.cancelReminder(for: session)
+        session.complete()
+        save()
+        activeSession = nil
+        refreshStats()
+        return session
+    }
+
+    func extendSession(byMinutes minutes: Int) {
+        guard let activeSession else { return }
+        activeSession.plannedMinutes += minutes
+        save()
+        NotificationService.scheduleEndReminder(for: activeSession)
+    }
+
+    // MARK: - Derived values
+
+    private func refreshActiveSession() {
+        let active = SessionStatus.active.rawValue
+        let paused = SessionStatus.paused.rawValue
+        let descriptor = FetchDescriptor<WorkSession>(
+            predicate: #Predicate { $0.statusRaw == active || $0.statusRaw == paused }
+        )
+        activeSession = try? context.fetch(descriptor).first
+    }
+
+    private func refreshStats() {
+        let now = Date.now
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: now)
+
+        if let session = activeSession {
+            sessionClock = Format.clock(session.remaining(at: now))
+        } else {
+            sessionClock = "00:00"
+        }
+
+        let sessions = (try? context.fetch(FetchDescriptor<WorkSession>(
+            predicate: #Predicate { $0.startedAt >= dayStart }
+        ))) ?? []
+        let focus = sessions.reduce(0) { $0 + $1.elapsed(at: now) }
+        focusTodayText = Format.compact(focus)
+
+        let target = TimeInterval(max(1, dailyFocusTargetMinutes) * 60)
+        percentOfTargetText = Format.percent(focus / target)
+
+        // Falls back to the start of the day's first tracked activity, so the
+        // stat reads sensibly before the first break has happened.
+        let activity = (try? context.fetch(FetchDescriptor<ActivityRecord>(
+            predicate: #Predicate { $0.startedAt >= dayStart }
+        ))) ?? []
+        let reference = DayReport.lastBreakEnd(in: activity)
+            ?? activity.map(\.startedAt).min()
+        sinceBreakText = reference.map { Format.clock(now.timeIntervalSince($0)) } ?? "--"
+    }
+
+    private func save() {
+        guard context.hasChanges else { return }
+        try? context.save()
+    }
+}

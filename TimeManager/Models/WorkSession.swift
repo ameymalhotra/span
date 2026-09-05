@@ -16,6 +16,9 @@ final class WorkSession {
     var honestWorkMinutes: Int?
     var distractions: Int?
     var reflection: String?
+    /// Whether the user has been asked for a review and what they answered.
+    /// Defaulted, so it migrates into the existing store without a custom stage.
+    var reflectionStateRaw: String = ReflectionState.pending.rawValue
 
     /// The individual runs that make up this session. Added so the timeline can
     /// draw the time actually worked rather than one block spanning the breaks.
@@ -59,10 +62,19 @@ final class WorkSession {
         return startedAt...max(startedAt, end)
     }
 
-    /// True once the user has actually filled in the post-session review. The
-    /// reflection sheet is dismissible, so a completed session frequently has
-    /// none and summaries must not treat that as "zero focus".
-    var isReflected: Bool { focusRating != nil }
+    var reflectionState: ReflectionState {
+        get { ReflectionState(rawValue: reflectionStateRaw) ?? .pending }
+        set { reflectionStateRaw = newValue.rawValue }
+    }
+
+    /// True once the user has actually filled in the post-session review.
+    var isReflected: Bool { reflectionState == .completed && focusRating != nil }
+
+    /// Finished, but the user has not answered either way — the sheet is still
+    /// owed. These must not be counted as "zero focus" in any summary.
+    var needsReflection: Bool {
+        status == .completed && reflectionState == .pending
+    }
 
     /// The run currently in progress, if any.
     var openSegment: SessionSegment? {
@@ -110,4 +122,13 @@ final class WorkSession {
 
 enum SessionStatus: String, Codable {
     case active, paused, completed
+}
+
+/// Distinguishes "never answered" from "declined to answer".
+///
+/// The review sheet used to be dismissible with no record either way, so a
+/// session the user closed with Escape was indistinguishable from one they had
+/// never been offered — and its nil fields quietly dragged every average down.
+enum ReflectionState: String, Codable {
+    case pending, completed, skipped
 }
