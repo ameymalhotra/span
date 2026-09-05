@@ -28,5 +28,6 @@ struct SidebarView: View {
     private func row(_ destination: Destination) -> some View {
         Label(destination.title, systemImage: destination.symbol)
             .tag(destination)
+            .accessibilityIdentifier("sidebar.\(destination.rawValue)")
     }
 }

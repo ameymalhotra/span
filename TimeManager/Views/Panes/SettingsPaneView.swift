@@ -54,6 +54,7 @@ struct SettingsPaneView: View {
         section("You") {
             row("Name", detail: "Used for the greeting on the Focus pane. Never leaves this Mac.") {
                 TextField("Your name", text: $userName)
+                    .accessibilityIdentifier("settings.userName")
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 180)
             }
@@ -113,6 +114,7 @@ struct SettingsPaneView: View {
                     get: { !model.tracker.isPaused },
                     set: { model.tracker.isPaused = !$0 }
                 ))
+                .accessibilityIdentifier("settings.tracking")
                 .labelsHidden()
                 .toggleStyle(.switch)
             }
@@ -123,6 +125,7 @@ struct SettingsPaneView: View {
                 Picker("", selection: $idleThresholdMinutes) {
                     ForEach([2, 3, 5, 10, 15], id: \.self) { Text("\($0)m").tag($0) }
                 }
+                .accessibilityIdentifier("settings.idleThreshold")
                 .labelsHidden()
                 .frame(width: 110)
             }
@@ -139,10 +142,12 @@ struct SettingsPaneView: View {
                         .font(Theme.Font.caption)
                 } else {
                     Button("Grant…") { model.accessibility.request() }
+                        .accessibilityIdentifier("settings.grantAccessibility")
                 }
             }
             if !model.accessibility.isTrusted {
                 Button("Open System Settings") { model.accessibility.openSystemSettings() }
+                    .accessibilityIdentifier("settings.openSystemSettings")
                     .buttonStyle(.link)
                     .font(Theme.Font.caption)
             }
@@ -153,6 +158,7 @@ struct SettingsPaneView: View {
         section("Alerts and the HUD") {
             row("Session end reminder", detail: "Notifies you when a timed session runs out.") {
                 Toggle("", isOn: $notificationsEnabled)
+                    .accessibilityIdentifier("settings.notifications")
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .onChange(of: notificationsEnabled) { _, enabled in
@@ -166,6 +172,7 @@ struct SettingsPaneView: View {
             row("Floating HUD",
                 detail: "A small always-on-top readout below the menu bar. Clicking it never takes focus from the app you are in.") {
                 Toggle("", isOn: $hudVisible)
+                    .accessibilityIdentifier("settings.hud")
                     .labelsHidden()
                     .toggleStyle(.switch)
             }

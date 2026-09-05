@@ -43,6 +43,7 @@ struct FocusPaneView: View {
                     .frame(maxWidth: 320)
             }
             Button("Start a session", action: onStart)
+                .accessibilityIdentifier("focus.start")
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut("n", modifiers: .command)
@@ -125,12 +126,15 @@ struct FocusPaneView: View {
             HStack(spacing: Theme.Space.m) {
                 if session.status == .paused {
                     Button("Resume") { model.resumeSession() }
+                        .accessibilityIdentifier("focus.resume")
                         .buttonStyle(.bordered)
                 } else {
                     Button("Pause") { model.pauseSession() }
+                        .accessibilityIdentifier("focus.pause")
                         .buttonStyle(.bordered)
                 }
                 Button("Finish", action: onFinish)
+                    .accessibilityIdentifier("focus.finish")
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
                     .foregroundStyle(Theme.onAccent)
@@ -139,6 +143,7 @@ struct FocusPaneView: View {
 
             if session.remaining() <= 0 {
                 Button("Add 5 minutes") { model.extendSession(byMinutes: 5) }
+                    .accessibilityIdentifier("focus.addFiveMinutes")
                     .buttonStyle(.link)
                     .font(Theme.Font.caption)
             }

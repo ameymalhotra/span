@@ -147,12 +147,14 @@ struct RootView: View {
                 Image(systemName: "chevron.left")
             }
             .help("Previous day")
+            .accessibilityIdentifier("toolbar.previousDay")
             .keyboardShortcut("[", modifiers: .command)
 
             Button { shift(selectedDate, by: 1) } label: {
                 Image(systemName: "chevron.right")
             }
             .help("Next day")
+            .accessibilityIdentifier("toolbar.nextDay")
             .keyboardShortcut("]", modifiers: .command)
             .disabled(Calendar.current.isDateInToday(selectedDate.wrappedValue))
 
@@ -167,11 +169,13 @@ struct RootView: View {
                     } label: {
                         Label(zoomLabel(height), systemImage: hourHeight == height ? "checkmark" : "")
                     }
+                    .accessibilityIdentifier("zoom.\(zoomLabel(height))")
                 }
             } label: {
                 Image(systemName: "arrow.up.and.down.text.horizontal")
             }
             .help("Timeline zoom")
+            .accessibilityIdentifier("toolbar.zoom")
 
             Button {
                 model.addBlock(on: model.selectedDate)
@@ -179,6 +183,7 @@ struct RootView: View {
                 Label("Add Block", systemImage: "plus")
             }
             .help("Add a time block")
+            .accessibilityIdentifier("toolbar.addBlock")
             .keyboardShortcut("b", modifiers: .command)
 
             Button {
@@ -187,6 +192,7 @@ struct RootView: View {
                 Label("Start Session", systemImage: "play.fill")
             }
             .disabled(model.activeSession != nil)
+            .accessibilityIdentifier("toolbar.startSession")
             .keyboardShortcut("n", modifiers: .command)
             .help("Start a focus session")
         }

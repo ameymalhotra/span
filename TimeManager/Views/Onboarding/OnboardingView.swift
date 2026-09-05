@@ -54,6 +54,7 @@ struct OnboardingView: View {
                 Text("What should Span call you?")
                     .font(Theme.Font.body)
                 TextField("Your name", text: $userName)
+                    .accessibilityIdentifier("onboarding.userName")
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 260)
                     .focused($nameFocused)
@@ -156,10 +157,12 @@ struct OnboardingView: View {
 
             if step > 0 {
                 Button("Back") { step -= 1 }
+                    .accessibilityIdentifier("onboarding.back")
             }
             Button(step == Self.stepCount - 1 ? "Start using Span" : "Continue") {
                 advance()
             }
+            .accessibilityIdentifier("onboarding.continue")
             .keyboardShortcut(.defaultAction)
         }
         .padding(Theme.Space.l)

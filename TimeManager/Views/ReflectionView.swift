@@ -50,6 +50,7 @@ struct ReflectionView: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                .accessibilityIdentifier("reflection.focus")
             }
 
             Section("How much of it felt like real work?") {
@@ -65,11 +66,13 @@ struct ReflectionView: View {
                              ?? "Not set")
                             .foregroundStyle(honestMinutes == nil ? Theme.tertiaryLabel : Theme.label)
                     }
+                    .accessibilityIdentifier("reflection.honestMinutes")
                 }
             }
 
             Section("Meaningful distractions") {
                 Stepper("\(distractions)", value: $distractions, in: 0...20)
+                    .accessibilityIdentifier("reflection.distractions")
             }
 
             Section("Anything worth noting?") {
@@ -92,6 +95,7 @@ struct ReflectionView: View {
                 session.reflectionState = .skipped
                 save()
             }
+            .accessibilityIdentifier("reflection.skip")
             .keyboardShortcut(.cancelAction)
 
             Spacer()
@@ -105,6 +109,7 @@ struct ReflectionView: View {
                 session.reflectionState = .completed
                 save()
             }
+            .accessibilityIdentifier("reflection.save")
             .keyboardShortcut(.defaultAction)
         }
         .padding(Theme.Space.l)

@@ -105,10 +105,13 @@ struct HUDPillView: View {
         if let session = model.activeSession {
             if session.status == .paused {
                 Button("Resume Session") { model.resumeSession() }
+                    .accessibilityIdentifier("hud.resume")
             } else {
                 Button("Pause Session") { model.pauseSession() }
+                    .accessibilityIdentifier("hud.pause")
             }
             Button("Finish Session") { model.finishSession() }
+                .accessibilityIdentifier("hud.finish")
             Divider()
         }
         Button("Open Span") {
@@ -122,9 +125,12 @@ struct HUDPillView: View {
         ))
         Divider()
         Button("Reset Position") { controller.resetPosition() }
+            .accessibilityIdentifier("hud.resetPosition")
         Button("Hide HUD") { isVisible = false }
+            .accessibilityIdentifier("hud.hide")
         Divider()
         Button("Quit Span") { NSApp.terminate(nil) }
+            .accessibilityIdentifier("hud.quit")
     }
 }
 

@@ -18,10 +18,13 @@ struct MenuBarPanelView: View {
                 HStack(spacing: Theme.Space.s) {
                     if session.status == .paused {
                         Button("Resume") { model.resumeSession() }
+                            .accessibilityIdentifier("menuBar.resume")
                     } else {
                         Button("Pause") { model.pauseSession() }
+                            .accessibilityIdentifier("menuBar.pause")
                     }
                     Button("Finish") { model.finishSession() }
+                        .accessibilityIdentifier("menuBar.finish")
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
                         .foregroundStyle(Theme.onAccent)
@@ -47,6 +50,7 @@ struct MenuBarPanelView: View {
                 NSApp.windows.first { !($0 is HUDPanel) }?.makeKeyAndOrderFront(nil)
             }
             Button("Quit") { NSApp.terminate(nil) }
+                .accessibilityIdentifier("menuBar.quit")
         }
         .font(Theme.Font.body)
         .padding(Theme.Space.l)

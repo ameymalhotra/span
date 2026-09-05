@@ -34,6 +34,7 @@ struct DurationPicker: View {
             if isCustom {
                 HStack(spacing: Theme.Space.s) {
                     TextField("Minutes", text: $draft)
+                        .accessibilityIdentifier("duration.customMinutes")
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 72)
                         .onChange(of: draft) { _, new in commit(new) }
@@ -80,6 +81,7 @@ struct DurationPicker: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("duration.\(label)")
     }
 
     /// Keeps a half-typed value usable: an empty or nonsense field leaves the

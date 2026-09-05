@@ -19,6 +19,7 @@ struct DateNavigator: View {
                 }
             }
             .buttonStyle(.accessoryBar)
+            .accessibilityIdentifier("dateNavigator.button")
             .popover(isPresented: $isPickerPresented) {
                 DatePicker("Day", selection: $date, in: ...Date.now, displayedComponents: .date)
                     .datePickerStyle(.graphical)
@@ -28,6 +29,7 @@ struct DateNavigator: View {
 
             if !Calendar.current.isDateInToday(date) {
                 Button("Today") { date = Calendar.current.startOfDay(for: .now) }
+                    .accessibilityIdentifier("dateNavigator.today")
                     .buttonStyle(.accessoryBar)
             }
         }

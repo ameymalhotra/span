@@ -36,6 +36,7 @@ struct StatusBarView: View {
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .help("Pause or resume automatic activity tracking")
+                .accessibilityIdentifier("status.trackingToggle")
 
                 Button {
                     isHUDVisible.toggle()
@@ -44,6 +45,7 @@ struct StatusBarView: View {
                 }
                 .buttonStyle(.accessoryBar)
                 .help(isHUDVisible ? "Hide the floating HUD" : "Show the floating HUD")
+                .accessibilityIdentifier("status.hudToggle")
             }
         }
         .padding(.horizontal, Theme.Space.m)

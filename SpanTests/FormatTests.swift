@@ -152,13 +152,13 @@ struct FormatTests {
         (0, "12 AM"), (1, "1 AM"), (9, "9 AM"), (12, "12 PM"), (13, "1 PM"), (23, "11 PM"),
     ])
     func hourLabel(hour: Int, expected: String) {
-        #expect(Format.hourLabel(hour) == expected)
+        #expect(Format.hourLabel(hour).normalisingSpaces == expected)
     }
 
     @Test("timeOfDay renders a short local time")
     func timeOfDay() {
-        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 9, 41)) == "9:41 AM")
-        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 0, 5)) == "12:05 AM")
-        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 13, 0)) == "1:00 PM")
+        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 9, 41)).normalisingSpaces == "9:41 AM")
+        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 0, 5)).normalisingSpaces == "12:05 AM")
+        #expect(Format.timeOfDay(Clock.date(2025, 9, 3, 13, 0)).normalisingSpaces == "1:00 PM")
     }
 }

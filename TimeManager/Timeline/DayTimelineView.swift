@@ -264,6 +264,7 @@ struct DayTimelineView: View {
             .overlay { moveArea(placed, entry: entry) }
             .overlay(alignment: .top) { resizeHandle(target, isHovered: isHovered, edge: .top) }
             .overlay(alignment: .bottom) { resizeHandle(target, isHovered: isHovered, edge: .bottom) }
+            .accessibilityIdentifier("timeline.block.\(placed.block.id)")
             .offset(x: laneX + width * CGFloat(placed.lane), y: placed.y)
     }
 
@@ -273,6 +274,7 @@ struct DayTimelineView: View {
         Color.clear
             .contentShape(Rectangle())
             .padding(.vertical, Self.handleHeight)
+            .accessibilityIdentifier("timeline.card.\(placed.block.id)")
             .onTapGesture {
                 inspectorY = placed.y
                 if let entry {

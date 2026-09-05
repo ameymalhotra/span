@@ -154,8 +154,9 @@ enum Fixture {
         return record
     }
 
-    /// A detached block, for the pure layout and geometry tests.
-    static func block(
+    /// A detached block, for the pure layout and geometry tests. Not a stored
+    /// model, so it needs no context and no actor.
+    nonisolated static func block(
         _ title: String = "Block",
         kind: TimelineBlock.Kind = .entry,
         from start: Date,
@@ -168,5 +169,16 @@ enum Fixture {
             kind: kind, title: title, subtitle: category, category: category,
             start: start, end: end, focusRating: focusRating
         )
+    }
+}
+
+// MARK: - String helpers
+
+extension String {
+    /// Modern locale data separates the time from AM/PM with a narrow no-break
+    /// space (U+202F). Tests compare against ordinary spaces.
+    var normalisingSpaces: String {
+        replacingOccurrences(of: "\u{202F}", with: " ")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
     }
 }

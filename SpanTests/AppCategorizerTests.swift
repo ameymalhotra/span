@@ -17,7 +17,6 @@ struct AppCategorizerTests {
         ("com.microsoft.teams2", "Meetings"),
         ("com.apple.Safari", "Browsing"),
         ("com.google.Chrome", "Browsing"),
-        ("company.thebrowser.Browser", "Browsing"),
         ("notion.id", "Reading"),
         ("md.obsidian", "Reading"),
         ("com.figma.Desktop", "Designing"),
@@ -31,7 +30,8 @@ struct AppCategorizerTests {
 
     @Test("an unrecognised app keeps its own name as the category")
     func unknownFallsBackToName() {
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.example.Ledger", appName: "Ledger") == "Ledger")
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.example.Tempo", appName: "Tempo") == "Tempo")
+        #expect(AppCategorizer.category(forBundleIdentifier: "io.example.widget", appName: "Widget") == "Widget")
     }
 
     @Test("a missing or empty bundle identifier falls back to the name")
@@ -64,8 +64,18 @@ struct AppCategorizerTests {
         #expect(category != "Housekeeping", "Archive Utility should be Housekeeping")
     }
 
+    @Test("BUG: Arc's real bundle identifier is not matched by the 'arc' needle")
+    func arcItselfIsNotMatched() {
+        // Arc ships as company.thebrowser.Browser. The needle intended for it
+        // therefore never fires for Arc, only for unrelated identifiers.
+        #expect(AppCategorizer.category(
+            forBundleIdentifier: "company.thebrowser.Browser", appName: "Arc") == "Arc")
+    }
+
     @Test("BUG: short needles match unrelated identifiers")
     func shortNeedleCollisions() {
+        // "edge" (Browsing) inside an ordinary word.
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.example.Ledger", appName: "Ledger") == "Browsing")
         // "tv" (Off Task) inside an ordinary reverse-DNS identifier.
         #expect(AppCategorizer.category(forBundleIdentifier: "com.tvtropes.reader", appName: "Reader") == "Off Task")
         // "meet" (Meetings) inside a word that has nothing to do with meetings.

@@ -12,6 +12,7 @@ struct TimeEntryEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             TextField("What was this?", text: $entry.title)
+                .accessibilityIdentifier("entryEditor.title")
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, weight: .semibold))
                 .focused($titleFocused)
@@ -24,7 +25,9 @@ struct TimeEntryEditor: View {
             // Exact times, so a block is never stuck at whatever the drag
             // happened to land on.
             DatePicker("Starts", selection: $entry.startedAt, displayedComponents: [.hourAndMinute])
+                .accessibilityIdentifier("entryEditor.start")
             DatePicker("Ends", selection: $entry.endedAt, displayedComponents: [.hourAndMinute])
+                .accessibilityIdentifier("entryEditor.end")
             HStack {
                 Text("Duration")
                 Spacer()
@@ -45,10 +48,12 @@ struct TimeEntryEditor: View {
                     Label("Delete", systemImage: "trash")
                 }
                 .buttonStyle(.borderless)
+                .accessibilityIdentifier("entryEditor.delete")
 
                 Spacer()
 
                 Button("Done") { commit() }
+                    .accessibilityIdentifier("entryEditor.done")
                     .keyboardShortcut(.defaultAction)
             }
         }

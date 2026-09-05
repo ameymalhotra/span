@@ -20,9 +20,11 @@ struct CategoryManager: View {
 
             HStack(spacing: Theme.Space.s) {
                 TextField("Add a category — school work, admin…", text: $newName)
+                    .accessibilityIdentifier("categories.newName")
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(add)
                 Button("Add", action: add)
+                    .accessibilityIdentifier("categories.add")
                     .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
@@ -39,6 +41,7 @@ struct CategoryManager: View {
                     .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.5))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("category.colour.\(category.name)")
             .help("Change colour")
 
             TextField("Name", text: Binding(
@@ -58,6 +61,7 @@ struct CategoryManager: View {
                     .foregroundStyle(Theme.tertiaryLabel)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("category.delete.\(category.name)")
             // Deleting a category leaves the records that used it alone — they
             // keep the name and fall back to a hashed colour.
             .help("Remove — sessions already filed here keep their name")

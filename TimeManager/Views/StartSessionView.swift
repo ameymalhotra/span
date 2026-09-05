@@ -58,6 +58,7 @@ struct StartSessionView: View {
                     TextField(text: $title, prompt: Text("e.g. Rebuild the timeline")) {
                         Text("Session title")
                     }
+                    .accessibilityIdentifier("startSession.title")
                     .labelsHidden()
                     CategoryPicker(selection: $category)
                     HStack(spacing: Theme.Space.xs) {
@@ -80,12 +81,14 @@ struct StartSessionView: View {
 
             HStack {
                 Button("Cancel") { dismiss() }
+                    .accessibilityIdentifier("startSession.cancel")
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Start") {
                     onStart(trimmedTitle, category.trimmingCharacters(in: .whitespacesAndNewlines), minutes)
                     dismiss()
                 }
+                .accessibilityIdentifier("startSession.start")
                 .keyboardShortcut(.defaultAction)
                 .disabled(trimmedTitle.isEmpty)
             }
