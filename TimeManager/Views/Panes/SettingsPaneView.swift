@@ -62,9 +62,8 @@ struct SettingsPaneView: View {
 
             Divider()
 
-            row("Default session", detail: "Pre-selected when you start a new session.") {
+            stackedRow("Default session", detail: "Pre-selected when you start a new session.") {
                 DurationPicker(minutes: $defaultSessionMinutes, showsSummary: false)
-                    .frame(width: 260)
             }
         }
     }
@@ -138,7 +137,7 @@ struct SettingsPaneView: View {
 
     private var data: some View {
         section("Your data") {
-            row("Storage", detail: "~/Library/Application Support/TimeManager. No account, no sync, nothing leaves this Mac.") {
+            row("Storage", detail: "Kept in one file on this Mac. No account, no sync, nothing leaves the machine.") {
                 EmptyView()
             }
         }
@@ -162,18 +161,37 @@ struct SettingsPaneView: View {
         }
     }
 
+    /// Label on the left, a compact control on the right.
     private func row(_ title: String, detail: String,
                      @ViewBuilder control: () -> some View) -> some View {
         HStack(alignment: .top, spacing: Theme.Space.l) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.Font.body)
-                Text(detail)
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: Theme.Space.m)
-            control()
+            label(title, detail)
+                // Priority and a floor together: without them a wide trailing
+                // control takes the space it asks for and the text collapses.
+                .frame(minWidth: 200, alignment: .leading)
+                .layoutPriority(1)
+            Spacer(minLength: Theme.Space.s)
+            control().fixedSize()
         }
+    }
+
+    /// Label above, control beneath — for controls too wide to sit beside text.
+    private func stackedRow(_ title: String, detail: String,
+                            @ViewBuilder control: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            label(title, detail)
+            control().frame(maxWidth: 330, alignment: .leading)
+        }
+    }
+
+    private func label(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(Theme.Font.body)
+            Text(detail)
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

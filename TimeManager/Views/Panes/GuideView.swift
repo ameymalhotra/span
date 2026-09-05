@@ -33,10 +33,10 @@ struct GuideView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text("How Time Manager works")
+            Text("How Span works")
                 .font(.system(size: 22, weight: .semibold))
             Text("""
-            The app answers one question: where did the day actually go? It \
+            Span answers one question: where did the day actually go? It \
             does that by putting three different kinds of time on a single \
             timeline — the sessions you start deliberately, the blocks you \
             write down yourself, and what your Mac was doing while you worked.

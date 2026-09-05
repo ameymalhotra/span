@@ -37,7 +37,8 @@ struct RootView: View {
 
     @AppStorage("hasSeenGuide") private var hasSeenGuide = false
     @State private var destination: Destination = .focus
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
+    private static let sidebarWidth: CGFloat = 216
     @State private var isStartingSession = false
     @State private var reflecting: WorkSession?
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
@@ -46,16 +47,19 @@ struct RootView: View {
         @Bindable var model = model
 
         VStack(spacing: 0) {
-            NavigationSplitView(columnVisibility: $columnVisibility) {
+            HStack(spacing: 0) {
                 SidebarView(selection: $destination)
-                    .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 280)
-            } detail: {
+                    .frame(width: Self.sidebarWidth)
+                Divider()
                 detail(selectedDate: $model.selectedDate)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             Divider()
             StatusBarView()
         }
-        .frame(minWidth: 940, minHeight: 600)
+        // Wide enough that the sidebar, the centre pane and the timeline can
+        // all hold their minimums at once.
+        .frame(minWidth: Self.sidebarWidth + 380 + 300, minHeight: 620)
         .task {
             guard !hasSeenGuide else { return }
             destination = .guide

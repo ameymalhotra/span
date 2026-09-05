@@ -42,7 +42,7 @@ struct MenuBarPanelView: View {
 
             Divider()
 
-            Button("Open Time Manager") {
+            Button("Open Span") {
                 NSApp.activate(ignoringOtherApps: true)
                 NSApp.windows.first { !($0 is HUDPanel) }?.makeKeyAndOrderFront(nil)
             }

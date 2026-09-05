@@ -31,7 +31,7 @@ enum Theme {
     /// floats over the desktop rather than sitting inside the app's surfaces,
     /// so there is no light variant to author. It holds to the app's own two
     /// colours — white at a few weights, teal for the live number — so the pill
-    /// reads as part of Time Manager rather than a second app parked on top.
+    /// reads as part of Span rather than a second app parked on top.
     enum HUD {
         static let value = Color.white.opacity(0.92)
         static let caption = Color.white.opacity(0.45)

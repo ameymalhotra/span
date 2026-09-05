@@ -111,7 +111,7 @@ struct HUDPillView: View {
             Button("Finish Session") { model.finishSession() }
             Divider()
         }
-        Button("Open Time Manager") {
+        Button("Open Span") {
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first { $0 is HUDPanel == false }?.makeKeyAndOrderFront(nil)
         }
@@ -124,7 +124,7 @@ struct HUDPillView: View {
         Button("Reset Position") { controller.resetPosition() }
         Button("Hide HUD") { isVisible = false }
         Divider()
-        Button("Quit Time Manager") { NSApp.terminate(nil) }
+        Button("Quit Span") { NSApp.terminate(nil) }
     }
 }
 

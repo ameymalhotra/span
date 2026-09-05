@@ -1,6 +1,6 @@
-# Time Manager
+# Span
 
-A macOS time tracker built around a single question: where did the day actually go?
+A macOS time tracker named for what it records: a span of time. Built around a single question: where did the day actually go?
 
 The main window is three panes — a focus timer, a day timeline, and review
 surfaces — plus a menu bar item and a floating HUD that stays readable while you
@@ -49,7 +49,7 @@ xcodebuild -project TimeManager.xcodeproj -scheme TimeManager \
   -derivedDataPath /tmp/TimeManagerBuild \
   build CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 
-open /tmp/TimeManagerBuild/Build/Products/Debug/TimeManager.app
+open /tmp/TimeManagerBuild/Build/Products/Debug/Span.app
 ```
 
 Sign the build rather than passing `CODE_SIGNING_ALLOWED=NO`: macOS keys the
