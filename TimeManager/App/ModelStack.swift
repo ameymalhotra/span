@@ -11,6 +11,7 @@ enum ModelStack {
         ActivityRecord.self,
         TimeEntry.self,
         TimeCategory.self,
+        AppCategoryRule.self,
     ])
 
     static func makeContainer() -> ModelContainer {
@@ -81,6 +82,13 @@ enum ModelStack {
         seeded.forEach(context.insert)
         try? context.save()
         CategoryPalette.updateRegistry(seeded)
+    }
+
+    /// Loads the user's app-to-category rules into the categoriser.
+    @MainActor
+    static func loadAppRules(in context: ModelContext) {
+        let rules = (try? context.fetch(FetchDescriptor<AppCategoryRule>())) ?? []
+        AppCategorizer.updateOverrides(rules)
     }
 
     // MARK: - Launch recovery

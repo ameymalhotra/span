@@ -26,6 +26,7 @@ struct SettingsPaneView: View {
                 you
                 goals
                 categoriesSection
+                appsSection
                 tracking
                 alerts
                 data
@@ -69,6 +70,12 @@ struct SettingsPaneView: View {
         }
     }
 
+
+    private var appsSection: some View {
+        section("Apps on the timeline") {
+            AppGroupingManager()
+        }
+    }
 
     private var categoriesSection: some View {
         section("Categories") {

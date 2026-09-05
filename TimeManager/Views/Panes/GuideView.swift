@@ -99,6 +99,7 @@ struct GuideView: View {
     private var categories: some View {
         card("Categories", "Your names, your colours.") {
             para("A category is just a name with a colour. Seven come set up; add your own — school work, admin, whatever you actually do — from the picker in a session or block, or in Settings.")
+            para("The activity rail can group your apps two ways, switchable from the legend above the timeline or in Settings. By category, Safari and Chrome both read as Browsing; by app, they are listed separately. Either way you can tell Span which category any app belongs to, and it re-files the time already recorded rather than only what comes next.")
             para("Ten preset colours are chosen to stay apart from one another, including for the most common kinds of colour blindness. If none of them suit, the colour wheel takes anything you like.")
             note("Past ten categories some colours become hard to tell apart. That is why every list shows the category's name next to its colour rather than relying on colour alone.")
         }

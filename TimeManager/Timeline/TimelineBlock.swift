@@ -68,9 +68,15 @@ extension TimelineBlock {
         // segment turns a session you paused briefly into two identical cards,
         // which reads as a duplicate rather than as a pause.
         let mergeGap: TimeInterval = 10 * 60
+        // A running session extends to when it is due to end rather than
+        // stopping at the current minute, so its remaining time is visible on
+        // the timeline and its end can be dragged.
+        let openEnd = session.status == .active
+            ? now.addingTimeInterval(session.remaining(at: now))
+            : now
         var runs: [(start: Date, end: Date)] = []
         for segment in session.segments.sorted(by: { $0.startedAt < $1.startedAt }) {
-            let end = segment.endedAt ?? now
+            let end = segment.endedAt ?? openEnd
             if var last = runs.last, segment.startedAt.timeIntervalSince(last.end) <= mergeGap {
                 last.end = max(last.end, end)
                 runs[runs.count - 1] = last
@@ -112,20 +118,36 @@ extension TimelineBlock {
     /// slivers; merged, they read as the band of time they actually were.
     static func mergedActivityBlocks(
         _ records: [ActivityRecord],
+        grouping: TimelineGrouping = .category,
         gapTolerance: TimeInterval = 90
     ) -> [TimelineBlock] {
+        func group(_ record: ActivityRecord) -> String {
+            guard !record.isIdle else { return "Away" }
+            switch grouping {
+            case .app: return record.appName
+            case .category:
+                return AppCategorizer.category(forBundleIdentifier: record.bundleIdentifier,
+                                               appName: record.appName)
+            }
+        }
+
         let sorted = records.sorted { $0.startedAt < $1.startedAt }
         var merged: [TimelineBlock] = []
         var run: (record: ActivityRecord, start: Date, end: Date)?
 
         func flush() {
             guard let run else { return }
+            let name = group(run.record)
             merged.append(TimelineBlock(
                 id: "activity-\(run.record.id)",
                 kind: run.record.isIdle ? .idle : .activity,
-                title: run.record.isIdle ? "Away" : run.record.appName,
-                subtitle: run.record.windowTitle ?? run.record.url,
-                category: run.record.categoryName ?? run.record.appName,
+                title: name,
+                // In category mode the app is still worth naming, since the
+                // group alone does not say which one you were in.
+                subtitle: [grouping == .category ? run.record.appName : nil,
+                           run.record.windowTitle ?? run.record.url]
+                    .compactMap { $0 }.joined(separator: " · "),
+                category: name,
                 start: run.start,
                 end: run.end,
                 focusRating: nil
@@ -134,7 +156,7 @@ extension TimelineBlock {
 
         for record in sorted {
             if var open = run,
-               open.record.appName == record.appName,
+               group(open.record) == group(record),
                open.record.isIdle == record.isIdle,
                record.startedAt.timeIntervalSince(open.end) <= gapTolerance {
                 open.end = max(open.end, record.endedAt)

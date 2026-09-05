@@ -80,7 +80,7 @@ struct DayReport {
 
         self.day = day
         self.blocks = sessionBlocks + entryBlocks + activityBlocks
-        self.focusedTime = sessionBlocks.reduce(0) { $0 + $1.duration }
+        self.focusedTime = sessions.reduce(0) { $0 + $1.elapsed(at: now) }
         self.trackedTime = activity.filter { !$0.isIdle }.reduce(0) { $0 + $1.duration }
 
         let completed = sessions.filter { $0.status == .completed }

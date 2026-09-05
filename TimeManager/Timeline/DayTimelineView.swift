@@ -25,6 +25,7 @@ struct DayTimelineView: View {
     @State private var hoveredRail: TimelineBlock?
     @State private var inspectorY: CGFloat = 0
     @State private var hoveredCard: String?
+    @AppStorage("timelineGrouping") private var groupingRaw = TimelineGrouping.category.rawValue
 
     private static let gutterWidth: CGFloat = 52
     /// Wide enough to read as a continuous band of the day rather than a line
@@ -63,10 +64,14 @@ struct DayTimelineView: View {
         let now = Date.now
         return sessions.flatMap { TimelineBlock.blocks(for: $0, now: now) }
             + entries.map(TimelineBlock.block(for:))
-            + TimelineBlock.mergedActivityBlocks(activity)
+            + TimelineBlock.mergedActivityBlocks(activity, grouping: grouping)
     }
 
     private var isToday: Bool { Calendar.current.isDateInToday(day) }
+
+    private var grouping: TimelineGrouping {
+        TimelineGrouping(rawValue: groupingRaw) ?? .category
+    }
 
     private var knownCategories: [String] {
         var seen: [String] = []
@@ -80,7 +85,7 @@ struct DayTimelineView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TimelineLegend(entries: legendEntries)
+            TimelineLegend(entries: legendEntries, grouping: $groupingRaw)
             Divider()
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
@@ -256,9 +261,18 @@ struct DayTimelineView: View {
             .frame(width: max(24, width - 3), height: placed.height, alignment: .topLeading)
             .contentShape(Rectangle())
             .onHover { hoveredCard = $0 ? placed.block.id : nil }
+            .overlay { moveArea(placed, entry: entry) }
             .overlay(alignment: .top) { resizeHandle(target, isHovered: isHovered, edge: .top) }
             .overlay(alignment: .bottom) { resizeHandle(target, isHovered: isHovered, edge: .bottom) }
             .offset(x: laneX + width * CGFloat(placed.lane), y: placed.y)
+    }
+
+    /// The part of a card that opens it and drags it around: everything except
+    /// the resize strips at either end.
+    private func moveArea(_ placed: PlacedBlock, entry: TimeEntry?) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .padding(.vertical, Self.handleHeight)
             .onTapGesture {
                 inspectorY = placed.y
                 if let entry {
@@ -269,9 +283,7 @@ struct DayTimelineView: View {
                     selection = placed.block
                 }
             }
-            // Simultaneous, so dragging to move does not swallow the tap that
-            // opens the block.
-            .simultaneousGesture(moveGesture(for: entry))
+            .gesture(moveGesture(for: entry))
     }
 
     /// The detail or editor, drawn in the timeline beside the block it belongs
@@ -375,6 +387,26 @@ struct DayTimelineView: View {
             setEnd = { entry.endedAt = $0 }
         }
 
+        /// A running session has no recorded end, so dragging its lower edge
+        /// changes when it is *due* to finish — which is what the countdown is
+        /// showing — instead of inventing time it has not worked yet.
+        init(runningSession session: WorkSession) {
+            start = { session.startedAt }
+            end = { Date.now.addingTimeInterval(session.remaining()) }
+            setStart = { moment in
+                session.startedAt = moment
+                if let first = session.segments.min(by: { $0.startedAt < $1.startedAt }) {
+                    first.startedAt = moment
+                }
+            }
+            setEnd = { moment in
+                let remaining = max(0, moment.timeIntervalSince(.now))
+                let planned = session.elapsed() + remaining
+                session.plannedMinutes = max(1, Int((planned / 60).rounded()))
+                NotificationService.scheduleEndReminder(for: session)
+            }
+        }
+
         init(session: WorkSession) {
             start = { session.startedAt }
             end = { session.endedAt ?? .now }
@@ -393,14 +425,15 @@ struct DayTimelineView: View {
         }
     }
 
-    /// A running session has no fixed end to drag, so only finished work is
-    /// resizable.
     private func resizable(for block: TimelineBlock) -> Resizable? {
         if let entry = entry(for: block) { return Resizable(entry: entry) }
-        if let session = session(for: block), session.status == .completed {
-            return Resizable(session: session)
+        guard let session = session(for: block) else { return nil }
+        switch session.status {
+        case .completed: return Resizable(session: session)
+        case .active: return Resizable(runningSession: session)
+        // Paused work has no end to move until it is resumed or finished.
+        case .paused: return nil
         }
-        return nil
     }
 
     private func session(for block: TimelineBlock) -> WorkSession? {
@@ -567,44 +600,109 @@ private struct TimelineGrid: View {
 /// Names the colours in the activity rail, with how long each took.
 private struct TimelineLegend: View {
     let entries: [CategoryTotal]
-    private static let shown = 5
+    @Binding var grouping: String
+
+    /// How many fit before the row starts to crowd the timeline it labels.
+    private static let shown = 4
+
+    @State private var isShowingAll = false
+
+    private var mode: TimelineGrouping {
+        TimelineGrouping(rawValue: grouping) ?? .category
+    }
 
     var body: some View {
-        Group {
+        HStack(spacing: Theme.Space.m) {
             if entries.isEmpty {
                 Text("Nothing tracked yet today — colours here will name what you were in")
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.tertiaryLabel)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Theme.Space.m) {
-                        ForEach(entries.prefix(Self.shown)) { entry in
-                            HStack(spacing: Theme.Space.xs) {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(entry.color)
-                                    .frame(width: 8, height: 8)
-                                Text(entry.name)
-                                    .font(Theme.Font.caption)
-                                    .foregroundStyle(Theme.secondaryLabel)
-                                Text(Format.compact(entry.duration))
-                                    .font(Theme.Font.caption.monospacedDigit())
-                                    .foregroundStyle(Theme.tertiaryLabel)
-                            }
-                        }
-                        if entries.count > Self.shown {
-                            Text("+\(entries.count - Self.shown) more")
-                                .font(Theme.Font.caption)
-                                .foregroundStyle(Theme.tertiaryLabel)
-                        }
+                ForEach(entries.prefix(Self.shown)) { entry in
+                    swatch(entry)
+                }
+                if entries.count > Self.shown {
+                    // The overflow is a button rather than a dead label: the
+                    // whole point of a key is that nothing in it is unreachable.
+                    Button {
+                        isShowingAll = true
+                    } label: {
+                        Text("+\(entries.count - Self.shown) more")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.accent)
                     }
+                    .buttonStyle(.plain)
                 }
             }
+
+            Spacer(minLength: Theme.Space.s)
+
+            Menu {
+                Picker("Group activity", selection: $grouping) {
+                    ForEach(TimelineGrouping.allCases) { option in
+                        Text(option.title).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } label: {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondaryLabel)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 22)
+            .help(mode.detail)
         }
         .padding(.horizontal, Theme.Space.m)
         .frame(height: 34)
         .background(Theme.surface.opacity(0.5))
+        .popover(isPresented: $isShowingAll) {
+            allEntries
+        }
+    }
+
+    private func swatch(_ entry: CategoryTotal) -> some View {
+        HStack(spacing: Theme.Space.xs) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(entry.color)
+                .frame(width: 8, height: 8)
+            Text(entry.name)
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.secondaryLabel)
+                .lineLimit(1)
+            Text(Format.compact(entry.duration))
+                .font(Theme.Font.caption.monospacedDigit())
+                .foregroundStyle(Theme.tertiaryLabel)
+        }
+        .fixedSize()
+    }
+
+    private var allEntries: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text(mode == .category ? "Today by category" : "Today by app")
+                .font(.system(size: 13, weight: .semibold))
+            ForEach(entries) { entry in
+                HStack(spacing: Theme.Space.s) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(entry.color)
+                        .frame(width: 9, height: 9)
+                    Text(entry.name)
+                        .font(Theme.Font.body)
+                    Spacer(minLength: Theme.Space.l)
+                    Text(Format.compact(entry.duration))
+                        .font(Theme.Font.body.monospacedDigit())
+                    Text(Format.percent(entry.fraction))
+                        .font(Theme.Font.caption.monospacedDigit())
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        }
+        .padding(Theme.Space.l)
+        .frame(width: 300)
     }
 }
 

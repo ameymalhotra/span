@@ -63,6 +63,7 @@ final class AppModel {
 
     func start() {
         ModelStack.seedCategoriesIfNeeded(in: context)
+        ModelStack.loadAppRules(in: context)
         ModelStack.recoverStaleSessions(in: context)
         refreshActiveSession()
         tracker.start()
