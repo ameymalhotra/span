@@ -17,6 +17,7 @@ final class AppModel {
     let tracker: ActivityTracker
     let accessibility = AccessibilityPermission()
     let updates = UpdateChecker()
+    let installer = UpdateInstaller()
 
     /// The day the main window is showing.
     var selectedDate: Date = Calendar.current.startOfDay(for: .now)

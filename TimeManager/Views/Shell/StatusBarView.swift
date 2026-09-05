@@ -38,6 +38,21 @@ struct StatusBarView: View {
                 .help("Pause or resume automatic activity tracking")
                 .accessibilityIdentifier("status.trackingToggle")
 
+                if case .available(let version, _, _) = model.updates.state {
+                    Button {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                            Text("Update \(version)")
+                        }
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Version \(version) is available — open Settings to install it")
+                }
+
                 Button {
                     isHUDVisible.toggle()
                 } label: {

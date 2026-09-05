@@ -189,6 +189,12 @@ The one thing Span sends anywhere is a **daily check against the GitHub releases
 API** to see whether a newer version exists. It transmits nothing but the
 request, and **Settings → Updates** turns it off.
 
+When an update is available, Span installs it itself — download, swap, relaunch,
+from **Settings → Updates**. You only need the DMG and the `xattr` command for
+the very first install. Note that Span verifies the download over HTTPS from
+GitHub but performs no signature check, because it has no Developer ID to sign
+with.
+
 Because window-title capture needs Accessibility, Span is deliberately **not
 sandboxed**, and so cannot ship on the Mac App Store.
 

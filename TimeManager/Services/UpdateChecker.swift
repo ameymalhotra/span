@@ -14,7 +14,7 @@ final class UpdateChecker {
         case idle
         case checking
         case upToDate
-        case available(version: String, url: URL)
+        case available(version: String, page: URL, asset: URL?)
         case failed
     }
 
@@ -60,8 +60,16 @@ final class UpdateChecker {
             let page = (json["html_url"] as? String).flatMap(URL.init(string:))
                 ?? URL(string: "https://github.com/ameymalhotra/span/releases/latest")!
 
+            // The disk image attached to the release, so the app can install
+            // the update itself rather than sending the user to a web page.
+            let assets = json["assets"] as? [[String: Any]] ?? []
+            let asset = assets
+                .first { ($0["name"] as? String)?.hasSuffix(".dmg") == true }
+                .flatMap { $0["browser_download_url"] as? String }
+                .flatMap(URL.init(string:))
+
             state = Self.isNewer(latest, than: currentVersion)
-                ? .available(version: latest, url: page)
+                ? .available(version: latest, page: page, asset: asset)
                 : .upToDate
         } catch {
             // A failed check is not worth reporting as an error; the app works

@@ -14,10 +14,17 @@ final class HUDController: NSObject, NSWindowDelegate {
         static let topOffset = "hud.topOffset"
     }
 
-    /// -1 means "never dragged", i.e. stay centred.
+    /// -1 means "never dragged", i.e. stay centred. Anything outside 0...1 is
+    /// treated as never dragged: a stored fraction beyond the screen puts the
+    /// panel somewhere the user cannot see or reach it, and the only way back
+    /// would be editing defaults by hand.
     private var xFraction: Double {
-        get { defaults.object(forKey: Key.xFraction) as? Double ?? -1 }
-        set { defaults.set(newValue, forKey: Key.xFraction) }
+        get {
+            guard let stored = defaults.object(forKey: Key.xFraction) as? Double,
+                  (0...1).contains(stored) else { return -1 }
+            return stored
+        }
+        set { defaults.set(min(max(newValue, 0), 1), forKey: Key.xFraction) }
     }
     private var topOffset: Double {
         get { defaults.object(forKey: Key.topOffset) as? Double ?? 8 }
@@ -77,7 +84,13 @@ final class HUDController: NSObject, NSWindowDelegate {
             ? frame.minX + CGFloat(xFraction) * max(1, frame.width - size.width)
             : frame.midX - size.width / 2
         let y = frame.maxY - size.height - CGFloat(topOffset)
-        panel.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
+
+        // Clamped to the visible frame regardless of what was stored, so a
+        // stale position — from another display, or a resolution change —
+        // cannot strand the panel off-screen.
+        let clampedX = min(max(x, frame.minX), max(frame.minX, frame.maxX - size.width))
+        let clampedY = min(max(y, frame.minY), max(frame.minY, frame.maxY - size.height))
+        panel.setFrameOrigin(NSPoint(x: clampedX.rounded(), y: clampedY.rounded()))
     }
 
     /// Follows whichever display the pointer is on, so the HUD turns up where
@@ -101,7 +114,12 @@ final class HUDController: NSObject, NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
         guard let panel, let screen = targetScreen() else { return }
         let frame = screen.visibleFrame
-        xFraction = Double((panel.frame.minX - frame.minX) / max(1, frame.width - panel.frame.width))
-        topOffset = Double(frame.maxY - panel.frame.maxY)
+        // A panel as wide as the screen makes the denominator vanish, and the
+        // fraction explodes; guard it rather than storing nonsense.
+        let travel = frame.width - panel.frame.width
+        guard travel > 1 else { return }
+        xFraction = Double((panel.frame.minX - frame.minX) / travel)
+        topOffset = Double(max(0, min(frame.height - panel.frame.height,
+                                      frame.maxY - panel.frame.maxY)))
     }
 }

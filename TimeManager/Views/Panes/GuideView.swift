@@ -159,6 +159,7 @@ struct GuideView: View {
         card("Where your data lives", nil) {
             para("Everything stays in a single file on this Mac, under Application Support. There is no account and no sync; nothing you record is ever uploaded.")
             para("Span makes exactly one network request: once a day it asks GitHub whether a newer version has been released. It sends nothing but the request, and you can switch it off in Settings.")
+            para("When there is one, Settings will download and install it for you — Span closes, swaps itself for the new copy and reopens. You never have to visit a web page or drag anything over the version you are running.")
             para("Settings also has the way out — delete the tracked activity on its own, or reset Span entirely and start over.")
         }
     }

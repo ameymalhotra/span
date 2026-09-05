@@ -197,24 +197,33 @@ struct SettingsPaneView: View {
 
             Divider()
 
-            HStack(spacing: Theme.Space.m) {
-                updateStatus
-                Spacer()
-                Button("Check now") {
-                    Task { await model.updates.check() }
-                }
-            }
+            updateStatus
         }
     }
 
     @ViewBuilder
     private var updateStatus: some View {
         switch model.updates.state {
-        case .idle:
-            Text("Version \(model.updates.currentVersion)")
-                .foregroundStyle(Theme.secondaryLabel)
+        case .idle, .upToDate, .failed:
+            HStack(spacing: Theme.Space.m) {
+                statusText
+                Spacer()
+                Button("Check now") { Task { await model.updates.check() } }
+            }
         case .checking:
-            Text("Checking…").foregroundStyle(Theme.secondaryLabel)
+            HStack(spacing: Theme.Space.m) {
+                ProgressView().controlSize(.small)
+                Text("Checking…").foregroundStyle(Theme.secondaryLabel)
+                Spacer()
+            }
+        case .available(let version, let page, let asset):
+            availableUpdate(version: version, page: page, asset: asset)
+        }
+    }
+
+    @ViewBuilder
+    private var statusText: some View {
+        switch model.updates.state {
         case .upToDate:
             Label("Version \(model.updates.currentVersion) is the latest",
                   systemImage: "checkmark.circle.fill")
@@ -223,12 +232,75 @@ struct SettingsPaneView: View {
             Text("Could not reach GitHub — Span works fine without it")
                 .foregroundStyle(Theme.tertiaryLabel)
                 .fixedSize(horizontal: false, vertical: true)
-        case .available(let version, let url):
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Version \(version) is available")
-                    .foregroundStyle(Theme.label)
-                Link("Open the release page", destination: url)
+        default:
+            Text("Version \(model.updates.currentVersion)")
+                .foregroundStyle(Theme.secondaryLabel)
+        }
+    }
+
+    /// The whole point of the check: install it from here, rather than sending
+    /// the user to a web page to find a file and drag it over a running app.
+    @ViewBuilder
+    private func availableUpdate(version: String, page: URL, asset: URL?) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Version \(version) is available")
+                        .font(Theme.Font.body.weight(.medium))
+                    Text("You have \(model.updates.currentVersion)")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryLabel)
+                }
+                Spacer()
+                installControl(asset: asset)
+            }
+
+            switch model.installer.phase {
+            case .downloading(let fraction):
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+            case .readyToRestart:
+                Text("Downloaded. Span will close and reopen on the new version.")
                     .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+            case .failed(let message):
+                Text(message)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            default:
+                EmptyView()
+            }
+
+            Link("What changed in \(version)", destination: page)
+                .font(Theme.Font.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func installControl(asset: URL?) -> some View {
+        switch model.installer.phase {
+        case .downloading:
+            Button("Downloading…") {}.disabled(true)
+        case .preparing:
+            Button("Preparing…") {}.disabled(true)
+        case .readyToRestart:
+            Button("Restart to finish") { model.installer.restartIntoUpdate() }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.onAccent)
+        default:
+            if let asset {
+                Button("Update now") {
+                    Task { await model.installer.install(from: asset) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.onAccent)
+            } else {
+                Link("Open the release page", destination: URL(string: "https://github.com/ameymalhotra/span/releases/latest")!)
             }
         }
     }
