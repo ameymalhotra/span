@@ -39,6 +39,8 @@ struct RootView: View {
     @State private var destination: Destination = .focus
 
     private static let sidebarWidth: CGFloat = 216
+    private static let centreMinimum: CGFloat = 380
+    private static let timelineMinimum: CGFloat = 300
     @State private var isStartingSession = false
     @State private var reflecting: WorkSession?
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
@@ -53,13 +55,17 @@ struct RootView: View {
                 Divider()
                 detail(selectedDate: $model.selectedDate)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Belt and braces: if a pane is ever squeezed below its
+                    // minimum anyway, it must not paint over the sidebar.
+                    .clipped()
             }
             Divider()
             StatusBarView()
         }
-        // Wide enough that the sidebar, the centre pane and the timeline can
-        // all hold their minimums at once.
-        .frame(minWidth: Self.sidebarWidth + 380 + 300, minHeight: 620)
+        // Deliberately more than the sum of the pane minimums: an exact fit
+        // leaves nothing for the divider and the panes overflow their slots.
+        .frame(minWidth: Self.sidebarWidth + Self.centreMinimum + Self.timelineMinimum + 80,
+               minHeight: 620)
         .task {
             guard !hasSeenGuide else { return }
             destination = .guide
@@ -85,9 +91,11 @@ struct RootView: View {
             } else {
                 HSplitView {
                     centerPane
-                        .frame(minWidth: 380, idealWidth: 540)
+                        .frame(minWidth: Self.centreMinimum, idealWidth: 540)
+                        .clipped()
                     timeline(for: selectedDate.wrappedValue)
-                        .frame(minWidth: 280, idealWidth: 360, maxWidth: 640)
+                        .frame(minWidth: Self.timelineMinimum, idealWidth: 360, maxWidth: 640)
+                        .clipped()
                 }
             }
         }
