@@ -38,10 +38,22 @@ enum ModelStack {
 
     private static let storeSuffixes = ["", "-wal", "-shm"]
 
-    private static func storeURL() -> URL {
-        let directory = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("TimeManager", isDirectory: true)
+    /// Set by the test harness to redirect the store into a temporary
+    /// directory. Nothing in the shipping app writes it, so a normal launch
+    /// takes the Application Support path below.
+    static let storeDirectoryOverrideKey = "SPAN_STORE_DIRECTORY"
+
+    private static var storeDirectoryOverride: URL? {
+        guard let path = ProcessInfo.processInfo.environment[storeDirectoryOverrideKey],
+              !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    static func storeURL() -> URL {
+        let directory = storeDirectoryOverride
+            ?? FileManager.default
+                .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("TimeManager", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("TimeManager.store")
     }
@@ -52,6 +64,9 @@ enum ModelStack {
     /// SwiftData app's store. Move it into our own directory, taking the `-wal`
     /// and `-shm` siblings with it so no committed transactions are lost.
     private static func relocateLegacyStoreIfNeeded() {
+        // A redirected store is a fresh sandbox; there is no legacy store to
+        // adopt, and adopting one would drag real data into it.
+        guard storeDirectoryOverride == nil else { return }
         let manager = FileManager.default
         let legacy = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("default.store")

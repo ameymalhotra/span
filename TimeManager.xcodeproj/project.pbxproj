@@ -6,16 +6,51 @@
 	objectVersion = 71;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000090 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000030;
+			remoteInfo = TimeManager;
+		};
+		A00000000000000000000091 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000050 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000030;
+			remoteInfo = TimeManager;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		A0000000000000000000001B /* TimeManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TimeManager.app; path = Span.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000001C /* SpanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000001D /* SpanUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpanUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A00000000000000000000021 /* TimeManager */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = TimeManager; sourceTree = "<group>"; };
+		A00000000000000000000023 /* SpanTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SpanTests; sourceTree = "<group>"; };
+		A00000000000000000000024 /* SpanUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SpanUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A00000000000000000000032 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000072 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000082 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -29,6 +64,8 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000021 /* TimeManager */,
+				A00000000000000000000023 /* SpanTests */,
+				A00000000000000000000024 /* SpanUITests */,
 				A00000000000000000000022 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -37,6 +74,8 @@
 			isa = PBXGroup;
 			children = (
 				A0000000000000000000001B /* TimeManager.app */,
+				A0000000000000000000001C /* SpanTests.xctest */,
+				A0000000000000000000001D /* SpanUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -64,6 +103,48 @@
 			productReference = A0000000000000000000001B /* TimeManager.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A00000000000000000000070 /* SpanTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000041 /* Build configuration list for PBXNativeTarget "SpanTests" */;
+			buildPhases = (
+				A00000000000000000000071 /* Sources */,
+				A00000000000000000000072 /* Frameworks */,
+				A00000000000000000000073 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000092 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A00000000000000000000023 /* SpanTests */,
+			);
+			name = SpanTests;
+			productName = SpanTests;
+			productReference = A0000000000000000000001C /* SpanTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A00000000000000000000080 /* SpanUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000042 /* Build configuration list for PBXNativeTarget "SpanUITests" */;
+			buildPhases = (
+				A00000000000000000000081 /* Sources */,
+				A00000000000000000000082 /* Frameworks */,
+				A00000000000000000000083 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000093 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A00000000000000000000024 /* SpanUITests */,
+			);
+			name = SpanUITests;
+			productName = SpanUITests;
+			productReference = A0000000000000000000001D /* SpanUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -76,6 +157,14 @@
 				TargetAttributes = {
 					A00000000000000000000030 = {
 						CreatedOnToolsVersion = 26.4;
+					};
+					A00000000000000000000070 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = A00000000000000000000030;
+					};
+					A00000000000000000000080 = {
+						CreatedOnToolsVersion = 26.4;
+						TestTargetID = A00000000000000000000030;
 					};
 				};
 			};
@@ -93,12 +182,28 @@
 			projectRoot = "";
 			targets = (
 				A00000000000000000000030 /* TimeManager */,
+				A00000000000000000000070 /* SpanTests */,
+				A00000000000000000000080 /* SpanUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A00000000000000000000033 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000073 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000083 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -115,7 +220,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A00000000000000000000071 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000081 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000092 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000030 /* TimeManager */;
+			targetProxy = A00000000000000000000090 /* PBXContainerItemProxy */;
+		};
+		A00000000000000000000093 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000030 /* TimeManager */;
+			targetProxy = A00000000000000000000091 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A00000000000000000000060 /* Debug */ = {
@@ -144,6 +276,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -194,6 +327,76 @@
 			};
 			name = Release;
 		};
+		A00000000000000000000064 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ameymalhotra.SpanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Span.app/Contents/MacOS/Span";
+			};
+			name = Debug;
+		};
+		A00000000000000000000065 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ameymalhotra.SpanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Span.app/Contents/MacOS/Span";
+			};
+			name = Release;
+		};
+		A00000000000000000000066 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ameymalhotra.SpanUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = TimeManager;
+			};
+			name = Debug;
+		};
+		A00000000000000000000067 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ameymalhotra.SpanUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = TimeManager;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -202,6 +405,24 @@
 			buildConfigurations = (
 				A00000000000000000000062 /* Debug */,
 				A00000000000000000000063 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000041 /* Build configuration list for PBXNativeTarget "SpanTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000064 /* Debug */,
+				A00000000000000000000065 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000042 /* Build configuration list for PBXNativeTarget "SpanUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000066 /* Debug */,
+				A00000000000000000000067 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

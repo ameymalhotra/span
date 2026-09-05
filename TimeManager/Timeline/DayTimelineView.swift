@@ -742,38 +742,48 @@ private struct LegendDetail: View {
         .frame(width: 340, height: min(460, CGFloat(entries.count) * 36 + 130))
     }
 
+    /// Grouping by app leaves nothing to expand, so those rows are plain text
+    /// rather than a disabled button — disabling one dims its whole content,
+    /// which reads as unavailable rather than as merely not expandable.
+    @ViewBuilder
     private func row(_ entry: LegendEntry) -> some View {
-        Button {
-            guard mode == .category else { return }
-            if expanded.contains(entry.name) { expanded.remove(entry.name) }
-            else { expanded.insert(entry.name) }
-        } label: {
-            HStack(spacing: Theme.Space.s) {
-                if mode == .category {
-                    Image(systemName: expanded.contains(entry.name) ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(Theme.tertiaryLabel)
-                        .frame(width: 10)
-                }
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(entry.color)
-                    .frame(width: 9, height: 9)
-                Text(entry.name)
-                    .font(Theme.Font.body)
-                    .foregroundStyle(Theme.label)
-                Spacer(minLength: Theme.Space.m)
-                Text(Format.compact(entry.duration))
-                    .font(Theme.Font.body.monospacedDigit())
-                    .foregroundStyle(Theme.label)
-                Text(Format.percent(entry.fraction))
-                    .font(Theme.Font.caption.monospacedDigit())
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .frame(width: 40, alignment: .trailing)
+        if mode == .category {
+            Button {
+                if expanded.contains(entry.name) { expanded.remove(entry.name) }
+                else { expanded.insert(entry.name) }
+            } label: {
+                rowContent(entry)
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+        } else {
+            rowContent(entry)
         }
-        .buttonStyle(.plain)
-        .disabled(mode == .app)
+    }
+
+    private func rowContent(_ entry: LegendEntry) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            if mode == .category {
+                Image(systemName: expanded.contains(entry.name) ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .frame(width: 10)
+            }
+            RoundedRectangle(cornerRadius: 2)
+                .fill(entry.color)
+                .frame(width: 9, height: 9)
+            Text(entry.name)
+                .font(Theme.Font.body)
+                .foregroundStyle(Theme.label)
+            Spacer(minLength: Theme.Space.m)
+            Text(Format.compact(entry.duration))
+                .font(Theme.Font.body.monospacedDigit())
+                .foregroundStyle(Theme.label)
+            Text(Format.percent(entry.fraction))
+                .font(Theme.Font.caption.monospacedDigit())
+                .foregroundStyle(Theme.secondaryLabel)
+                .frame(width: 40, alignment: .trailing)
+        }
+        .contentShape(Rectangle())
     }
 
     private func appRow(_ app: LegendEntry.AppShare) -> some View {
