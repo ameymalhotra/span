@@ -46,42 +46,61 @@ struct AppCategorizerTests {
         #expect(AppCategorizer.category(forBundleIdentifier: "com.TinySpeck.SlackMacGap", appName: "X") == "Talking")
     }
 
-    @Test("the first matching rule wins over a later one")
-    func firstRuleWins() {
-        // Contains both "cursor" (Building, rule 1) and "notes" (Reading, rule 5).
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.cursor.notes", appName: "X") == "Building")
+    @Test("an explicit identifier beats a keyword in another category")
+    func identifierBeatsKeyword() {
+        // Contains "chrome" (Browsing, a keyword) but is listed under Building.
+        #expect(AppCategorizer.category(
+            forBundleIdentifier: "com.jetbrains.chromeplugin", appName: "X") == "Building")
     }
 
     // MARK: - Substring collisions
 
-    @Test("BUG: Archive Utility files as Browsing because its identifier contains 'arc'")
-    func archiveUtilityCollidesWithArc() {
-        let category = AppCategorizer.category(
-            forBundleIdentifier: "com.apple.archiveutility", appName: "Archive Utility")
-        // Housekeeping lists "archiveutility" explicitly, but Browsing's "arc"
-        // needle matches first and the rule list is ordered, first hit wins.
-        #expect(category == "Browsing")
-        #expect(category != "Housekeeping", "Archive Utility should be Housekeeping")
-    }
-
-    @Test("BUG: Arc's real bundle identifier is not matched by the 'arc' needle")
-    func arcItselfIsNotMatched() {
-        // Arc ships as company.thebrowser.Browser. The needle intended for it
-        // therefore never fires for Arc, only for unrelated identifiers.
+    @Test("Archive Utility is housekeeping, not a browser")
+    func archiveUtilityIsNotABrowser() {
+        // Its identifier contains "arc"; an explicit identifier rule settles it
+        // before any keyword is consulted.
         #expect(AppCategorizer.category(
-            forBundleIdentifier: "company.thebrowser.Browser", appName: "Arc") == "Arc")
+            forBundleIdentifier: "com.apple.archiveutility", appName: "Archive Utility")
+            == "Housekeeping")
     }
 
-    @Test("BUG: short needles match unrelated identifiers")
-    func shortNeedleCollisions() {
-        // "edge" (Browsing) inside an ordinary word.
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.example.Ledger", appName: "Ledger") == "Browsing")
-        // "tv" (Off Task) inside an ordinary reverse-DNS identifier.
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.tvtropes.reader", appName: "Reader") == "Off Task")
-        // "meet" (Meetings) inside a word that has nothing to do with meetings.
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.meetup.organiser", appName: "Organiser") == "Meetings")
-        // "notes" (Reading) inside a note-adjacent but unrelated app.
-        #expect(AppCategorizer.category(forBundleIdentifier: "com.banknotes.scanner", appName: "Scanner") == "Reading")
+    @Test("Arc is recognised by the identifier it actually ships under")
+    func arcIsMatched() {
+        // Arc is company.thebrowser.Browser — nothing in it says "arc".
+        #expect(AppCategorizer.category(
+            forBundleIdentifier: "company.thebrowser.Browser", appName: "Arc") == "Browsing")
+    }
+
+    @Test("an ordinary word inside an identifier no longer files the app", arguments: [
+        ("com.example.Ledger", "Ledger"),          // contains "edge"
+        ("com.tvtropes.reader", "Reader"),         // contains "tv"
+        ("com.meetup.organiser", "Organiser"),     // contains "meet"
+        ("com.banknotes.scanner", "Scanner"),      // contains "notes"
+        ("com.thingsmagazine.app", "Things Magazine"), // contains "things"
+        ("com.bearblog.writer", "Bear Blog"),      // contains "bear"
+        ("com.novastudio.tool", "Nova Studio"),    // contains "nova"
+        ("com.craftbeer.finder", "Craft Beer"),    // contains "craft" and "finder"
+    ])
+    func wordsInsideIdentifiersDoNotMatch(bundleID: String, appName: String) {
+        #expect(AppCategorizer.category(forBundleIdentifier: bundleID, appName: appName) == appName)
+    }
+
+    @Test("a vendor namespace can be claimed wholesale")
+    func namespacePrefixes() {
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.jetbrains.intellij", appName: "X") == "Building")
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.jetbrains.AppCode", appName: "X") == "Building")
+        // The prefix has to end at a component boundary. (Checked with a
+        // vendor that is not also a keyword, so only the prefix rule is in
+        // play — "jetbrains" is distinctive enough to stand alone as one.)
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.seriflabs.affinity", appName: "X") == "Designing")
+        #expect(AppCategorizer.category(forBundleIdentifier: "com.seriflabsclone.app", appName: "Clone") == "Clone")
+    }
+
+    @Test("an opaque identifier is still caught by a distinctive keyword")
+    func keywordFallback() {
+        // Cursor ships under a generated ToDesktop identifier.
+        #expect(AppCategorizer.category(
+            forBundleIdentifier: "com.todesktop.cursor230313", appName: "Cursor") == "Building")
     }
 
     @Test("the app name is ignored when the bundle identifier is present")
