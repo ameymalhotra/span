@@ -70,34 +70,71 @@ struct TimelineGeometryTests {
         #expect(geometry.date(for: 99_999) == Clock.dayStart.addingTimeInterval(24 * 3600))
     }
 
-    // MARK: - The DST labelling defect
+    // MARK: - Rows and their labels
 
-    @Test("BUG: after a fall-back transition, a block sits an hour below its gutter label")
-    func dstLabellingDrift() {
+    @Test("on an ordinary day the row index is the hour")
+    func rowsMatchHoursNormally() {
+        for hour in 0..<24 {
+            #expect(geometry.hour(atRow: hour) == hour)
+        }
+    }
+
+    @Test("after a fall-back transition the rows stay in step with the clock")
+    func rowLabelsFollowTheClockInAutumn() {
         let dayStart = Clock.date(2025, 11, 2)
         let day = TimelineGeometry(dayStart: dayStart, hourHeight: hourHeight)
 
-        // HourGutter draws Format.hourLabel(row) at row * hourHeight, so row 13
-        // is labelled "1 PM". Local 1 PM on this day is 14 elapsed hours after
-        // midnight, because 1 AM happened twice.
+        // 1 AM happens twice, so the two rows either side of the change both
+        // read 1 AM and everything after it stays honest.
+        #expect(day.hour(atRow: 1) == 1)
+        #expect(day.hour(atRow: 2) == 1)
+        #expect(day.hour(atRow: 14) == 13)
+
+        // A 1 PM block sits at row 14, and row 14 is the one labelled 1 PM.
         let onePM = Clock.date(2025, 11, 2, 13, 0)
         #expect(day.y(for: onePM) == 14 * hourHeight)
-        #expect(day.y(for: onePM) != 13 * hourHeight,
-                "a 1 PM block should line up with the row labelled 1 PM")
-
-        // Before the transition the two agree, which is why the drift is easy
-        // to miss.
-        let midnightThirty = Clock.date(2025, 11, 2, 0, 30)
-        #expect(day.y(for: midnightThirty) == 0.5 * hourHeight)
+        #expect(day.hour(atRow: 14) == Calendar.current.component(.hour, from: onePM))
     }
 
-    @Test("BUG: after a spring-forward transition the drift runs the other way")
-    func dstLabellingDriftSpring() {
+    @Test("after a spring-forward transition the rows stay in step too")
+    func rowLabelsFollowTheClockInSpring() {
         let day = TimelineGeometry(dayStart: Clock.date(2025, 3, 9), hourHeight: hourHeight)
+
+        // 2 AM never happens, so row 2 is 3 AM.
+        #expect(day.hour(atRow: 1) == 1)
+        #expect(day.hour(atRow: 2) == 3)
+
         let onePM = Clock.date(2025, 3, 9, 13, 0)
-        // 2 AM never happened, so 1 PM is only 12 elapsed hours in.
         #expect(day.y(for: onePM) == 12 * hourHeight)
-        #expect(day.y(for: onePM) != 13 * hourHeight)
+        #expect(day.hour(atRow: 12) == Calendar.current.component(.hour, from: onePM))
+    }
+
+    @Test("every row on a DST day is labelled with the time actually at it")
+    func everyRowLabelIsHonest() {
+        for dayStart in [Clock.date(2025, 3, 9), Clock.date(2025, 11, 2), Clock.dayStart] {
+            let day = TimelineGeometry(dayStart: dayStart, hourHeight: hourHeight)
+            for row in 0..<day.hourCount {
+                let at = day.date(for: CGFloat(row) * hourHeight)
+                #expect(day.hour(atRow: row) == Calendar.current.component(.hour, from: at))
+            }
+        }
+    }
+
+    @Test("row(for:) is the inverse of hour(atRow:)")
+    func rowRoundTrips() {
+        for dayStart in [Clock.date(2025, 3, 9), Clock.date(2025, 11, 2), Clock.dayStart] {
+            let day = TimelineGeometry(dayStart: dayStart, hourHeight: hourHeight)
+            for row in 0..<day.hourCount {
+                let at = day.date(for: CGFloat(row) * hourHeight)
+                #expect(day.row(for: at) == row)
+            }
+        }
+    }
+
+    @Test("row(for:) clamps sensibly before the day starts")
+    func rowBeforeDayStart() {
+        #expect(geometry.row(for: Clock.dayStart) == 0)
+        #expect(geometry.row(for: Clock.at(hour: 9.9)) == 9)
     }
 
     // MARK: - snapped

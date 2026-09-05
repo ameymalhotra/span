@@ -31,6 +31,22 @@ struct TimelineGeometry {
         return dayStart.addingTimeInterval(TimeInterval(clamped / hourHeight) * 3600)
     }
 
+    /// The wall-clock hour shown at row `index`.
+    ///
+    /// Not simply `index`: rows are elapsed hours from midnight, and on a DST
+    /// day those stop matching the clock at the transition. On a 25-hour day
+    /// row 14 is 1 PM, not 2 PM — labelling it by index put every block after
+    /// the change an hour away from its own label.
+    func hour(atRow index: Int) -> Int {
+        Calendar.current.component(.hour, from: date(for: CGFloat(index) * hourHeight))
+    }
+
+    /// The row a moment falls in — the inverse of `hour(atRow:)`, for scrolling
+    /// to a time of day.
+    func row(for date: Date) -> Int {
+        Int(date.timeIntervalSince(dayStart) / 3600)
+    }
+
     /// Rounds a time to the nearest `minutes`, so dragged blocks land on tidy
     /// boundaries the way calendar events do rather than on 10:37.
     func snapped(_ date: Date, minutes: Int = 5) -> Date {

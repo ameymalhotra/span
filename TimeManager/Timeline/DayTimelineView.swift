@@ -557,11 +557,10 @@ struct DayTimelineView: View {
     private func scrollToRelevantHour(using proxy: ScrollViewProxy) async {
         // A scroll issued before the first layout pass is silently dropped.
         try? await Task.sleep(for: .milliseconds(80))
-        let calendar = Calendar.current
         let anchorDate: Date? = isToday ? .now : blocks.map(\.start).min()
         guard let anchorDate else { return }
-        let hour = max(0, calendar.component(.hour, from: anchorDate) - 1)
-        proxy.scrollTo(HourAnchor(hour: hour), anchor: .top)
+        let row = max(0, geometry.row(for: anchorDate) - 1)
+        proxy.scrollTo(HourAnchor(hour: row), anchor: .top)
     }
 }
 
@@ -578,7 +577,9 @@ private struct HourGutter: View {
         ZStack(alignment: .topTrailing) {
             Color.clear
             ForEach(0..<geometry.hourCount, id: \.self) { hour in
-                Text(Format.hourLabel(hour))
+                // Labelled by the clock time actually at this offset, which is
+                // not the row index on a day a DST change lands in.
+                Text(Format.hourLabel(geometry.hour(atRow: hour)))
                     .font(Theme.Font.gutter)
                     .foregroundStyle(Theme.tertiaryLabel)
                     .padding(.trailing, Theme.Space.s)
