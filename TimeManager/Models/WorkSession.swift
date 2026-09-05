@@ -51,6 +51,28 @@ final class WorkSession {
         return segments.reduce(0) { $0 + $1.duration(at: date) }
     }
 
+    /// Time worked inside `range`.
+    ///
+    /// A day total cannot just use `elapsed`: a session begun at 23:30 and
+    /// still running at 00:30 worked half its time on each side of midnight,
+    /// and counting all of it against either day is wrong.
+    func elapsed(in range: ClosedRange<Date>, at date: Date = .now) -> TimeInterval {
+        func overlap(_ start: Date, _ end: Date) -> TimeInterval {
+            max(0, min(end, range.upperBound).timeIntervalSince(max(start, range.lowerBound)))
+        }
+        guard !segments.isEmpty else {
+            // Legacy path. Pauses were never recorded individually, so where
+            // they fell inside the span is unknowable; they are spread across
+            // it in proportion, which is the least wrong answer available.
+            let end = endedAt ?? pausedAt ?? date
+            let whole = max(0, end.timeIntervalSince(startedAt))
+            guard whole > 0 else { return 0 }
+            let inside = overlap(startedAt, end)
+            return max(0, inside - totalPausedSeconds * (inside / whole))
+        }
+        return segments.reduce(0) { $0 + overlap($1.startedAt, $1.endedAt ?? date) }
+    }
+
     func remaining(at date: Date = .now) -> TimeInterval {
         max(0, plannedDuration - elapsed(at: date))
     }

@@ -350,11 +350,10 @@ struct AppModelTests {
         #expect(abs(steps - steps.rounded()) < 0.000_001)
     }
 
-    @Test("BUG: a session running across midnight drops out of today's focus")
-    func focusTodayMissesSessionsStartedYesterday() async throws {
-        // refreshStats fetches only sessions with startedAt >= today's start, so
-        // a session begun at 23:30 and still running at 00:30 contributes
-        // nothing to "focus today" — the number resets mid-session.
+    @Test("a session running across midnight counts its share of today")
+    func focusTodayCountsTheShareAfterMidnight() async throws {
+        // Begun 30 minutes before midnight, still running 30 minutes after it:
+        // half belongs to today, and the number must not reset at midnight.
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date.now)
         let startedYesterday = todayStart.addingTimeInterval(-Clock.minutes(30))
@@ -364,16 +363,25 @@ struct AppModelTests {
         try context.save()
 
         await awaitStatsRefresh()
-        #expect(model.focusTodayText == "0m", "the running session is not counted at all")
 
-        // Whereas the same session started a minute after midnight is counted.
-        let startedToday = todayStart.addingTimeInterval(Clock.minutes(1))
-        Fixture.session(in: context, startedAt: startedToday, status: .active,
-                        segments: [(startedToday, nil)])
+        // Only the part since midnight, so the hours before it are not counted
+        // twice. Compared loosely because the session is still running.
+        #expect(model.focusTodayText != "0m", "the running session is not counted at all")
+        let sinceMidnight = Date.now.timeIntervalSince(todayStart)
+        #expect(model.focusTodayText == Format.compact(sinceMidnight))
+    }
+
+    @Test("a session finished before midnight does not leak into today")
+    func focusTodayIgnoresYesterdaysSessions() async throws {
+        let todayStart = Calendar.current.startOfDay(for: Date.now)
+        let start = todayStart.addingTimeInterval(-Clock.hours(3))
+        let end = todayStart.addingTimeInterval(-Clock.hours(1))
+        Fixture.session(in: context, startedAt: start, endedAt: end, status: .completed,
+                        segments: [(start, end)])
         try context.save()
 
         await awaitStatsRefresh()
-        #expect(model.focusTodayText != "0m")
+        #expect(model.focusTodayText == "0m")
     }
 
     @Test("time since the last break reads as unknown with nothing tracked")

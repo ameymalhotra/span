@@ -193,10 +193,17 @@ final class AppModel {
             sessionClock = "00:00"
         }
 
+        // Deliberately not `startedAt >= dayStart`: a session begun at 23:30 and
+        // still running at 00:30 belongs partly to today, and filtering it out
+        // reset this number to zero mid-session. The window reaches back a day
+        // to catch it; `elapsed(in:)` then counts only today's share, so the
+        // hours before midnight are not double-counted.
+        let windowStart = dayStart.addingTimeInterval(-24 * 3600)
         let sessions = (try? context.fetch(FetchDescriptor<WorkSession>(
-            predicate: #Predicate { $0.startedAt >= dayStart }
+            predicate: #Predicate { $0.startedAt >= windowStart }
         ))) ?? []
-        let focus = sessions.reduce(0) { $0 + $1.elapsed(at: now) }
+        let today = dayStart...max(dayStart, now)
+        let focus = sessions.reduce(0) { $0 + $1.elapsed(in: today, at: now) }
         focusTodayText = Format.compact(focus)
 
         let target = TimeInterval(max(1, dailyFocusTargetMinutes) * 60)

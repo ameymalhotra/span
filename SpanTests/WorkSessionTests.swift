@@ -214,6 +214,67 @@ struct WorkSessionTests {
         #expect(session.elapsed(at: Clock.at(hour: 15)) == 0)
     }
 
+    // MARK: - elapsed(in:)
+
+    @Test("elapsed in a window counts only the runs inside it")
+    func elapsedInWindow() {
+        let session = Fixture.session(in: context, segments: [
+            (Clock.at(hour: 8), Clock.at(hour: 10)),
+            (Clock.at(hour: 14), Clock.at(hour: 15)),
+        ])
+        let morning = Clock.at(hour: 9)...Clock.at(hour: 12)
+        #expect(session.elapsed(in: morning, at: Clock.at(hour: 20)) == 3600)
+    }
+
+    @Test("a run straddling the window edge is counted in part")
+    func elapsedInWindowClips() {
+        let session = Fixture.session(in: context,
+                                      segments: [(Clock.at(hour: 23), Clock.at(hour: 25))])
+        let today = Clock.dayStart...Clock.at(hour: 24)
+        #expect(session.elapsed(in: today, at: Clock.at(hour: 26)) == 3600)
+
+        let tomorrow = Clock.at(hour: 24)...Clock.at(hour: 48)
+        #expect(session.elapsed(in: tomorrow, at: Clock.at(hour: 26)) == 3600)
+    }
+
+    @Test("the two sides of a boundary add up to the whole")
+    func elapsedInWindowPartitions() {
+        let session = Fixture.session(in: context,
+                                      segments: [(Clock.at(hour: 22), Clock.at(hour: 26))])
+        let now = Clock.at(hour: 30)
+        let before = session.elapsed(in: Clock.dayStart...Clock.at(hour: 24), at: now)
+        let after = session.elapsed(in: Clock.at(hour: 24)...Clock.at(hour: 48), at: now)
+        #expect(before + after == session.elapsed(at: now))
+    }
+
+    @Test("a window that misses the session entirely counts nothing")
+    func elapsedInWindowDisjoint() {
+        let session = Fixture.session(in: context,
+                                      segments: [(Clock.at(hour: 9), Clock.at(hour: 10))])
+        #expect(session.elapsed(in: Clock.at(hour: 14)...Clock.at(hour: 16),
+                                at: Clock.at(hour: 20)) == 0)
+    }
+
+    @Test("an open run is clipped to now as well as to the window")
+    func elapsedInWindowOpenRun() {
+        let session = Fixture.session(in: context, status: .active,
+                                      segments: [(Clock.at(hour: 9), nil)])
+        #expect(session.elapsed(in: Clock.dayStart...Clock.at(hour: 24),
+                                at: Clock.at(hour: 10)) == 3600)
+    }
+
+    @Test("a legacy session spreads its pauses across the window")
+    func elapsedInWindowLegacy() {
+        // 9-11 with an hour of pauses somewhere inside; half the span falls in
+        // the window, so half the pause does too.
+        let session = Fixture.session(
+            in: context, startedAt: Clock.at(hour: 9), endedAt: Clock.at(hour: 11),
+            totalPausedSeconds: 3600)
+        #expect(session.elapsed(at: Clock.at(hour: 20)) == 3600)
+        #expect(session.elapsed(in: Clock.at(hour: 10)...Clock.at(hour: 12),
+                                at: Clock.at(hour: 20)) == 1800)
+    }
+
     @Test("remaining counts down and stops at zero")
     func remaining() {
         let session = Fixture.session(in: context, plannedMinutes: 60, status: .active,
