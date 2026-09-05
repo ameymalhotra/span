@@ -102,6 +102,7 @@ private struct HUDStat: View {
             .foregroundStyle(.white.opacity(0.45))
         }
         // A fixed slot so a changing digit never reflows its neighbours.
-        .frame(minWidth: 148, alignment: .leading)
+        .frame(minWidth: 150, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 }

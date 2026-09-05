@@ -31,6 +31,14 @@ struct TimelineGeometry {
         return dayStart.addingTimeInterval(TimeInterval(clamped / hourHeight) * 3600)
     }
 
+    /// Rounds a time to the nearest `minutes`, so dragged blocks land on tidy
+    /// boundaries the way calendar events do rather than on 10:37.
+    func snapped(_ date: Date, minutes: Int = 5) -> Date {
+        let step = TimeInterval(minutes * 60)
+        let offset = date.timeIntervalSince(dayStart)
+        return dayStart.addingTimeInterval((offset / step).rounded() * step)
+    }
+
     /// Vertical extent of a block, clipped to the visible day and given a floor
     /// so a very short span stays visible and clickable.
     func extent(for block: TimelineBlock, minimumHeight: CGFloat = 3) -> (y: CGFloat, height: CGFloat) {

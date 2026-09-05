@@ -7,12 +7,10 @@ struct RibbonBlockView: View {
     var body: some View {
         Group {
             if block.kind == .idle {
-                // Away time gets no fill at all — an empty hatched outline reads
-                // instantly as "nothing happened here", which a pale solid
-                // block never quite does.
+                // Away time is recessive but still solid: at a few points tall a
+                // dashed outline renders as scattered dots, not a block.
                 RoundedRectangle(cornerRadius: 3)
-                    .strokeBorder(Theme.tertiaryLabel.opacity(0.5),
-                                  style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    .fill(Theme.tertiaryLabel.opacity(0.22))
             } else {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(block.color.opacity(0.85))

@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 enum Destination: String, Hashable, CaseIterable, Identifiable {
-    case focus, timeline, day, week, categories
+    case focus, timeline, day, insights, categories, settings
 
     var id: String { rawValue }
 
@@ -11,7 +11,8 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .focus: "Focus"
         case .timeline: "Timeline"
         case .day: "Day"
-        case .week: "Week"
+        case .insights: "Insights"
+        case .settings: "Settings"
         case .categories: "Categories"
         }
     }
@@ -21,7 +22,8 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .focus: "target"
         case .timeline: "calendar.day.timeline.left"
         case .day: "square.grid.2x2"
-        case .week: "chart.bar"
+        case .insights: "chart.bar"
+        case .settings: "gearshape"
         case .categories: "circle.grid.3x3"
         }
     }
@@ -90,8 +92,10 @@ struct RootView: View {
             )
         case .day:
             DayReviewView(day: model.selectedDate)
-        case .week:
-            WeekReviewView(anchor: model.selectedDate)
+        case .insights:
+            InsightsView(anchor: model.selectedDate)
+        case .settings:
+            SettingsPaneView()
         case .categories:
             CategoryBreakdownView(day: model.selectedDate)
         }
@@ -117,9 +121,7 @@ struct RootView: View {
             }
             .help("Next day")
             .disabled(Calendar.current.isDateInToday(selectedDate.wrappedValue))
-        }
 
-        ToolbarItem(placement: .principal) {
             DateNavigator(date: selectedDate)
         }
 
@@ -136,6 +138,14 @@ struct RootView: View {
                 Image(systemName: "arrow.up.and.down.text.horizontal")
             }
             .help("Timeline zoom")
+
+            Button {
+                model.addBlock(on: model.selectedDate)
+            } label: {
+                Label("Add Block", systemImage: "plus")
+            }
+            .help("Add a time block")
+            .keyboardShortcut("b", modifiers: .command)
 
             Button {
                 if model.activeSession == nil { isStartingSession = true }

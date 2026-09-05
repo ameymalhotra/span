@@ -17,8 +17,12 @@ enum IdleMonitor {
 
     /// How long the user must be untouched before the span is recorded as a
     /// break. Five minutes is long enough to survive reading a long page, short
-    /// enough that stepping away for coffee is not billed as work.
-    static let threshold: TimeInterval = 5 * 60
+    /// enough that stepping away for coffee is not billed as work; adjustable
+    /// in Settings because that trade-off is personal.
+    static var threshold: TimeInterval {
+        let minutes = UserDefaults.standard.object(forKey: "idleThresholdMinutes") as? Int ?? 5
+        return TimeInterval(max(1, minutes) * 60)
+    }
 
     static var isIdle: Bool { idleInterval() >= threshold }
 }

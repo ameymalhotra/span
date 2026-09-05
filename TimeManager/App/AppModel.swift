@@ -22,6 +22,10 @@ final class AppModel {
 
     private(set) var activeSession: WorkSession?
 
+    /// A block just created from the toolbar, waiting for the timeline to open
+    /// its editor.
+    var pendingBlockEdit: TimeEntry?
+
     // Pre-formatted so a tick that doesn't change the displayed text doesn't
     // invalidate any view. Publishing a `Date` would re-render every second
     // regardless of whether anything visibly moved.
@@ -126,6 +130,26 @@ final class AppModel {
         NotificationService.scheduleEndReminder(for: activeSession)
     }
 
+    /// Adds a hand-made block on `day`: at the current time when that is today,
+    /// otherwise mid-morning, since a past day has no "now".
+    func addBlock(on day: Date, minutes: Int = 30) {
+        let calendar = Calendar.current
+        let start: Date
+        if calendar.isDateInToday(day) {
+            let step = TimeInterval(5 * 60)
+            start = Date(timeIntervalSinceReferenceDate:
+                (Date.now.timeIntervalSinceReferenceDate / step).rounded() * step)
+        } else {
+            start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
+        }
+        let entry = TimeEntry(title: "", category: "",
+                              startedAt: start,
+                              endedAt: start.addingTimeInterval(TimeInterval(minutes * 60)))
+        context.insert(entry)
+        save()
+        pendingBlockEdit = entry
+    }
+
     // MARK: - Derived values
 
     private func refreshActiveSession() {
@@ -162,9 +186,15 @@ final class AppModel {
         let activity = (try? context.fetch(FetchDescriptor<ActivityRecord>(
             predicate: #Predicate { $0.startedAt >= dayStart }
         ))) ?? []
-        let reference = DayReport.lastBreakEnd(in: activity)
-            ?? activity.map(\.startedAt).min()
-        sinceBreakText = reference.map { Format.clock(now.timeIntervalSince($0)) } ?? "--"
+        if tracker.isPaused {
+            sinceBreakText = "—"
+        } else {
+            let reference = DayReport.lastBreakEnd(in: activity)
+                ?? activity.map(\.startedAt).min()
+            // Compact, not clock: this is a span of hours, and "12:42:10"
+            // both reads as a countdown and overflows the pill.
+            sinceBreakText = reference.map { Format.compact(now.timeIntervalSince($0)) } ?? "—"
+        }
     }
 
     private func save() {

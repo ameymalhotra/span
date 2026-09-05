@@ -11,15 +11,17 @@ struct SidebarView: View {
             }
             Section("Review") {
                 row(.day)
-                row(.week)
+                row(.insights)
                 row(.categories)
+            }
+            Section {
+                row(.settings)
             }
         }
         // `.sidebar` already carries the system's vibrancy — and on recent
         // macOS its Liquid Glass treatment. Painting a background over it
         // fights the platform rather than matching it.
         .listStyle(.sidebar)
-        .navigationTitle("Time Manager")
     }
 
     private func row(_ destination: Destination) -> some View {
