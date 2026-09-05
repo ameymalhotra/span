@@ -76,7 +76,7 @@ struct AppGroupingManager: View {
             }
             Spacer(minLength: Theme.Space.s)
             CategoryPicker(selection: binding(for: app))
-                .frame(width: 190)
+                .frame(minWidth: 130, maxWidth: 190)
         }
     }
 

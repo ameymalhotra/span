@@ -1,15 +1,60 @@
+import SwiftData
 import SwiftUI
 
-/// The centre pane: one large ring showing the running session, or an invitation
-/// to start one.
+/// The centre pane: the running session, or — when nothing is running — where
+/// the day stands and the quickest ways back into work.
 struct FocusPaneView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.modelContext) private var context
 
     @AppStorage("userName") private var userName = ""
     @AppStorage("personalNote") private var personalNote = ""
+    @AppStorage("dailyFocusTargetMinutes") private var targetMinutes = 300
+    @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 60
+
+    @Query private var todaySessions: [WorkSession]
+    @Query private var recentSessions: [WorkSession]
 
     let onStart: () -> Void
     let onFinish: () -> Void
+
+    init(onStart: @escaping () -> Void, onFinish: @escaping () -> Void) {
+        self.onStart = onStart
+        self.onFinish = onFinish
+
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: .now)
+        _todaySessions = Query(filter: #Predicate<WorkSession> { $0.startedAt >= dayStart },
+                               sort: \.startedAt)
+        // A fortnight is enough to surface what you actually keep returning to
+        // without dredging up a one-off from last month.
+        let recentStart = calendar.date(byAdding: .day, value: -14, to: dayStart) ?? dayStart
+        _recentSessions = Query(filter: #Predicate<WorkSession> { $0.startedAt >= recentStart },
+                                sort: \.startedAt, order: .reverse)
+    }
+
+    private var focusToday: TimeInterval {
+        todaySessions.reduce(0) { $0 + $1.elapsed() }
+    }
+
+    private var targetFraction: Double {
+        let target = TimeInterval(max(1, targetMinutes) * 60)
+        return min(1, focusToday / target)
+    }
+
+    /// Distinct recent pieces of work, most recent first.
+    private var pickUpAgain: [WorkSession] {
+        var seen: Set<String> = []
+        var result: [WorkSession] = []
+        for session in recentSessions where session.status == .completed {
+            let key = session.title.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !key.isEmpty, !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(session)
+            if result.count == 3 { break }
+        }
+        return result
+    }
 
     var body: some View {
         ZStack {
@@ -25,40 +70,133 @@ struct FocusPaneView: View {
         .onDisappear { model.endFastUpdates() }
     }
 
-    // MARK: - Idle
+    // MARK: - Nothing running
 
     private var idle: some View {
-        VStack(spacing: Theme.Space.l) {
-            Image(systemName: "target")
-                .font(.system(size: 40, weight: .thin))
-                .foregroundStyle(Theme.tertiaryLabel)
-            VStack(spacing: Theme.Space.xs) {
+        VStack(alignment: .leading, spacing: Theme.Space.xl) {
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(Format.greeting(userName))
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(Theme.label)
-                Text("Start a focused session, then give yourself an honest review when it ends.")
+                Text(Date.now, format: .dateTime.weekday(.wide).day().month(.wide))
                     .font(Theme.Font.body)
                     .foregroundStyle(Theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
             }
-            Button("Start a session", action: onStart)
-                .accessibilityIdentifier("focus.start")
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut("n", modifiers: .command)
+
+            todayRing
+
+            Button(action: onStart) {
+                HStack(spacing: Theme.Space.s) {
+                    Image(systemName: "play.fill").font(.system(size: 11))
+                    Text("Start a session")
+                    Text("·")
+                        .foregroundStyle(Theme.onAccent.opacity(0.6))
+                    Text(Format.compact(TimeInterval(defaultSessionMinutes * 60)))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.onAccent.opacity(0.75))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .foregroundStyle(Theme.onAccent)
+            .controlSize(.large)
+            .keyboardShortcut("n", modifiers: .command)
+
+            if !pickUpAgain.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text("Pick up again")
+                        .font(Theme.Font.sectionHeader)
+                        .tracking(0.5)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Theme.tertiaryLabel)
+                    ForEach(pickUpAgain) { session in
+                        resumeRow(session)
+                    }
+                }
+            }
 
             if !personalNote.isEmpty {
                 Text(personalNote)
                     .font(Theme.Font.body)
                     .italic()
                     .foregroundStyle(Theme.secondaryLabel)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 340)
-                    .padding(.top, Theme.Space.s)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: 360)
+        .padding(Theme.Space.xxl)
+    }
+
+    /// Today against the target — the same ring the countdown uses, so progress
+    /// reads the same way whether or not a session is running.
+    private var todayRing: some View {
+        HStack(spacing: Theme.Space.xl) {
+            ProgressRing(progress: targetFraction, colour: Theme.accent, diameter: 132, width: 8) {
+                VStack(spacing: 1) {
+                    Text(Format.compact(focusToday))
+                        .font(.system(size: 22, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Theme.label)
+                    Text("focused")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.tertiaryLabel)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                statLine(Format.percent(targetFraction), "of your \(Format.compact(TimeInterval(targetMinutes * 60))) target")
+                statLine("\(todaySessions.filter { $0.status == .completed }.count)",
+                         "sessions finished today")
+                if focusToday > 0 {
+                    statLine(Format.compact(max(0, TimeInterval(targetMinutes * 60) - focusToday)),
+                             "left to reach it")
+                }
             }
         }
-        .padding(Theme.Space.xxl)
+    }
+
+    private func statLine(_ value: String, _ label: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
+            Text(value)
+                .font(Theme.Font.body.weight(.medium).monospacedDigit())
+                .foregroundStyle(Theme.label)
+            Text(label)
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.secondaryLabel)
+        }
+    }
+
+    /// One tap starts the same work again, at the default length.
+    private func resumeRow(_ session: WorkSession) -> some View {
+        Button {
+            model.startSession(title: session.title,
+                               category: session.category,
+                               minutes: defaultSessionMinutes)
+        } label: {
+            HStack(spacing: Theme.Space.s) {
+                Circle()
+                    .fill(CategoryPalette.color(for: session.category))
+                    .frame(width: 8, height: 8)
+                Text(session.title)
+                    .font(Theme.Font.body)
+                    .foregroundStyle(Theme.label)
+                    .lineLimit(1)
+                Spacer(minLength: Theme.Space.s)
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.tertiaryLabel)
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Start this again for \(Format.compact(TimeInterval(defaultSessionMinutes * 60)))")
     }
 
     // MARK: - Running
@@ -68,57 +206,47 @@ struct FocusPaneView: View {
             let elapsed = session.elapsed(at: context.date)
             let remaining = session.remaining(at: context.date)
             let progress = min(1, elapsed / max(1, session.plannedDuration))
+            let colour = CategoryPalette.color(for: session.category)
 
             VStack(spacing: Theme.Space.xl) {
                 VStack(spacing: Theme.Space.xs) {
                     Text(session.category.uppercased())
                         .font(Theme.Font.sectionHeader)
                         .tracking(0.8)
-                        .foregroundStyle(CategoryPalette.color(for: session.category))
+                        .foregroundStyle(colour)
                     Text(session.title)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(Theme.label)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                 }
 
-                ring(progress: progress, remaining: remaining, session: session)
+                ProgressRing(progress: progress, colour: colour, diameter: 248, width: 7) {
+                    VStack(spacing: Theme.Space.xs) {
+                        Text(Format.clock(remaining))
+                            .font(Theme.Font.timer)
+                            .foregroundStyle(Theme.label)
+                        Text(statusLine(session, remaining: remaining))
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(remaining <= 0 ? .orange : Theme.secondaryLabel)
+                    }
+                }
 
                 controls(session)
+
+                Text("\(Format.compact(focusToday)) focused today · \(Format.percent(targetFraction)) of target")
+                    .font(Theme.Font.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.tertiaryLabel)
             }
             .padding(Theme.Space.xxl)
         }
     }
 
-    private func ring(progress: Double, remaining: TimeInterval, session: WorkSession) -> some View {
-        ZStack {
-            Circle()
-                .stroke(Theme.hairline, lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    CategoryPalette.color(for: session.category),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 0.6), value: progress)
-
-            VStack(spacing: Theme.Space.xs) {
-                Text(Format.clock(remaining))
-                    .font(Theme.Font.timer)
-                    .foregroundStyle(Theme.label)
-                Text(statusLine(session, remaining: remaining))
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(remaining <= 0 ? .orange : Theme.secondaryLabel)
-            }
-        }
-        .frame(width: 260, height: 260)
-    }
-
     private func statusLine(_ session: WorkSession, remaining: TimeInterval) -> String {
         if session.status == .paused { return "Paused" }
         if remaining <= 0 { return "Time's up — finish when you're ready" }
-        return "of \(session.plannedMinutes) minutes"
+        return "of \(Format.compact(session.plannedDuration))"
     }
 
     private func controls(_ session: WorkSession) -> some View {
@@ -126,15 +254,12 @@ struct FocusPaneView: View {
             HStack(spacing: Theme.Space.m) {
                 if session.status == .paused {
                     Button("Resume") { model.resumeSession() }
-                        .accessibilityIdentifier("focus.resume")
                         .buttonStyle(.bordered)
                 } else {
                     Button("Pause") { model.pauseSession() }
-                        .accessibilityIdentifier("focus.pause")
                         .buttonStyle(.bordered)
                 }
                 Button("Finish", action: onFinish)
-                    .accessibilityIdentifier("focus.finish")
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
                     .foregroundStyle(Theme.onAccent)
@@ -143,10 +268,33 @@ struct FocusPaneView: View {
 
             if session.remaining() <= 0 {
                 Button("Add 5 minutes") { model.extendSession(byMinutes: 5) }
-                    .accessibilityIdentifier("focus.addFiveMinutes")
                     .buttonStyle(.link)
                     .font(Theme.Font.caption)
             }
         }
+    }
+}
+
+/// A ring with a label in the middle. Used for both the countdown and the day's
+/// progress, so the two read as the same measure.
+struct ProgressRing<Label: View>: View {
+    let progress: Double
+    let colour: Color
+    let diameter: CGFloat
+    let width: CGFloat
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.hairline, lineWidth: width)
+            Circle()
+                .trim(from: 0, to: max(0, min(1, progress)))
+                .stroke(colour, style: StrokeStyle(lineWidth: width, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.easeOut(duration: 0.6), value: progress)
+            label()
+        }
+        .frame(width: diameter, height: diameter)
     }
 }

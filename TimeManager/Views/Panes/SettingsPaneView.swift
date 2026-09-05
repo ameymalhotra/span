@@ -212,10 +212,11 @@ struct SettingsPaneView: View {
             label(title, detail)
                 // Priority and a floor together: without them a wide trailing
                 // control takes the space it asks for and the text collapses.
-                .frame(minWidth: 160, alignment: .leading)
+                .frame(minWidth: 130, alignment: .leading)
                 .layoutPriority(1)
             Spacer(minLength: Theme.Space.s)
-            control().fixedSize()
+            control()
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -224,7 +225,7 @@ struct SettingsPaneView: View {
                             @ViewBuilder control: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             label(title, detail)
-            control().frame(maxWidth: 330, alignment: .leading)
+            control().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

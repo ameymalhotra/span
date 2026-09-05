@@ -41,11 +41,15 @@ struct RootView: View {
     @State private var destination: Destination = .focus
 
     private static let sidebarWidth: CGFloat = 216
-    private static let centreMinimum: CGFloat = 380
+    /// Wide enough for the widest control the centre pane holds once page and
+    /// section padding are taken out — the settings duration picker. A pane
+    /// whose content cannot fit its minimum renders wider than its slot, and
+    /// the overflow lands under the sidebar.
+    private static let centreMinimum: CGFloat = 460
     private static let timelineMinimum: CGFloat = 300
     /// Deliberately more than the sum of the pane minimums: an exact fit leaves
     /// nothing for the divider and the panes overflow their slots.
-    private static let minimumWidth: CGFloat = 216 + 380 + 300 + 80
+    private static let minimumWidth: CGFloat = sidebarWidth + centreMinimum + timelineMinimum + 40
     private static let minimumHeight: CGFloat = 620
     @State private var isStartingSession = false
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
