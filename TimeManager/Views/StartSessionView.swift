@@ -39,7 +39,16 @@ struct StartSessionView: View {
 
             Form {
                 Section("What are you working on?") {
-                    TextField("e.g. Rebuild the timeline", text: $title)
+                    // `prompt`, not the label: inside a grouped Form the
+                    // first string is the row's *label*, which macOS lays out
+                    // on the left and pushes the field itself to the trailing
+                    // edge — leaving the caret parked at the far right of the
+                    // row while the example text sat where a placeholder looks
+                    // like it should be.
+                    TextField(text: $title, prompt: Text("e.g. Rebuild the timeline")) {
+                        Text("Session title")
+                    }
+                    .labelsHidden()
                     CategoryPicker(selection: $category)
                     HStack(spacing: Theme.Space.xs) {
                         Circle()

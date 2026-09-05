@@ -125,6 +125,18 @@ extension Color {
     }
 }
 
+extension Color {
+    /// `#RRGGBB` for persistence. Nil when the colour has no sRGB
+    /// representation, which a picked colour always does.
+    var hexString: String? {
+        guard let srgb = NSColor(self).usingColorSpace(.sRGB) else { return nil }
+        return String(format: "#%02X%02X%02X",
+                      Int((srgb.redComponent * 255).rounded()),
+                      Int((srgb.greenComponent * 255).rounded()),
+                      Int((srgb.blueComponent * 255).rounded()))
+    }
+}
+
 extension NSColor {
     convenience init(rgbHex hex: UInt32) {
         self.init(

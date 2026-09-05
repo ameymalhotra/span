@@ -34,7 +34,7 @@ struct CategoryManager: View {
                 editingColorFor = category
             } label: {
                 Circle()
-                    .fill(CategoryPalette.color(slot: category.colorSlot))
+                    .fill(category.resolvedColor)
                     .frame(width: 14, height: 14)
                     .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.5))
             }
@@ -65,10 +65,16 @@ struct CategoryManager: View {
         .popover(item: $editingColorFor) { editing in
             VStack(alignment: .leading, spacing: Theme.Space.m) {
                 Text(editing.name).font(.system(size: 13, weight: .semibold))
-                SwatchRow(selection: Binding(
-                    get: { editing.colorSlot },
-                    set: { editing.colorSlot = $0; refresh() }
-                ))
+                SwatchGrid(
+                    slot: Binding(
+                        get: { editing.colorSlot },
+                        set: { editing.colorSlot = $0; editing.colorHex = nil; refresh() }
+                    ),
+                    custom: Binding(
+                        get: { editing.colorHex.map { Color(hexString: $0) } },
+                        set: { editing.colorHex = $0?.hexString; refresh() }
+                    )
+                )
             }
             .padding(Theme.Space.l)
         }
@@ -77,7 +83,7 @@ struct CategoryManager: View {
     private func add() {
         let name = newName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let used = Set(categories.map(\.colorSlot))
+        let used = Set(categories.filter { $0.colorHex == nil }.map(\.colorSlot))
         let slot = CategoryPalette.swatches.first { !used.contains($0.slot) }?.slot ?? 0
         context.insert(TimeCategory(name: name, colorSlot: slot,
                                     sortIndex: (categories.map(\.sortIndex).max() ?? 0) + 1))

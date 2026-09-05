@@ -73,8 +73,13 @@ struct ReflectionView: View {
             }
 
             Section("Anything worth noting?") {
-                TextField("Optional", text: $note, axis: .vertical)
-                    .lineLimit(3...6)
+                // See the note in StartSessionView: a Form row's first string
+                // is its label, not its placeholder.
+                TextField(text: $note, prompt: Text("Optional"), axis: .vertical) {
+                    Text("Note")
+                }
+                .labelsHidden()
+                .lineLimit(3...6)
             }
         }
         .formStyle(.grouped)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// A named kind of work, with a colour the user chooses.
 ///
@@ -16,7 +17,19 @@ final class TimeCategory {
     /// keeps a light and a dark variant instead of one colour that only works
     /// in one appearance.
     var colorSlot: Int = 0
+    /// Set when the colour came from the wheel rather than the preset row;
+    /// overrides `colorSlot` when present. Optional, so this stays an additive
+    /// change to a store that already exists.
+    var colorHex: String?
     var sortIndex: Int = 0
+
+    /// The colour to draw. A custom hex is a single value used in both
+    /// appearances — unavoidable when the user picks it themselves — whereas a
+    /// preset keeps a separate light and dark variant.
+    var resolvedColor: Color {
+        if let colorHex, !colorHex.isEmpty { return Color(hexString: colorHex) }
+        return CategoryPalette.color(slot: colorSlot)
+    }
 
     init(name: String, colorSlot: Int, sortIndex: Int) {
         self.id = UUID()
