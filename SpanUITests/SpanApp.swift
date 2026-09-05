@@ -47,6 +47,16 @@ struct SpanApp {
         return self
     }
 
+    /// Quits and reopens against the same store, so a test can check that
+    /// something was actually written rather than just held in memory.
+    func relaunch() {
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(window.waitForExistence(timeout: Self.timeout * 2),
+                      "the window never came back after a relaunch")
+        app.activate()
+    }
+
     func terminate() {
         app.terminate()
         try? FileManager.default.removeItem(at: storeDirectory)
@@ -71,12 +81,35 @@ struct SpanApp {
         return app.descendants(matching: .any)[identifier]
     }
 
+    /// SwiftUI does not carry an accessibility identifier onto the
+    /// NSPopUpButton a `Picker` becomes, so menus are found by what they show.
+    func popUpButton(showing value: String, timeout: TimeInterval = SpanApp.timeout) -> XCUIElement? {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            for index in 0..<app.popUpButtons.count {
+                let button = app.popUpButtons.element(boundBy: index)
+                if (button.value as? String) == value { return button }
+            }
+            Thread.sleep(forTimeInterval: 0.3)
+        } while Date() < deadline
+        return nil
+    }
+
     // MARK: - Navigation
 
-    func select(_ destination: String) {
-        let row = app.descendants(matching: .any)["sidebar.\(destination)"]
-        XCTAssertTrue(row.waitForExistence(timeout: Self.timeout), "no sidebar row for \(destination)")
-        row.click()
+    func select(_ destination: String, file: StaticString = #filePath, line: UInt = #line) {
+        for attempt in 0..<3 {
+            let row = app.descendants(matching: .any)["sidebar.\(destination)"]
+            guard row.waitForExistence(timeout: Self.timeout) else {
+                if attempt == 2 {
+                    XCTFail("no sidebar row for \(destination)", file: file, line: line)
+                }
+                continue
+            }
+            app.activate()
+            row.click()
+            return
+        }
     }
 
     func startSession(title: String, minutes: String? = nil) {

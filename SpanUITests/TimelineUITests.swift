@@ -110,8 +110,7 @@ final class TimelineUITests: XCTestCase {
         span.button("entryEditor.done").click()
         span.app.staticTexts["Persist me"].waitToAppear(10)
 
-        span.app.terminate()
-        span.app.launch()
+        span.relaunch()
 
         XCTAssertTrue(span.app.staticTexts["Persist me"].waitForExistence(timeout: 15),
                       "the block did not survive a relaunch — it was never saved")

@@ -53,8 +53,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.button("categories.add").click()
         _ = span.app.textFields["Persisted"].waitForExistence(timeout: 10)
 
-        span.app.terminate()
-        span.app.launch()
+        span.relaunch()
         span.select("settings")
 
         XCTAssertTrue(span.app.textFields["Persisted"].waitForExistence(timeout: 15)
@@ -97,11 +96,14 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         span.textField("settings.userName").waitToAppear(10, "the name field is missing")
-        XCTAssertTrue(span.control("settings.dailyTarget").exists, "the daily target picker is missing")
-        XCTAssertTrue(span.control("settings.idleThreshold").exists, "the idle threshold picker is missing")
         XCTAssertTrue(span.control("settings.tracking").exists, "the tracking toggle is missing")
         XCTAssertTrue(span.control("settings.hud").exists, "the HUD toggle is missing")
         XCTAssertTrue(span.control("settings.notifications").exists, "the notifications toggle is missing")
+
+        // The two menus are NSPopUpButtons; SwiftUI does not carry an
+        // identifier onto them, so they are found by their current value.
+        XCTAssertTrue(span.popUpButton(showing: "5h") != nil, "the daily target menu is missing")
+        XCTAssertTrue(span.popUpButton(showing: "5m") != nil, "the idle threshold menu is missing")
     }
 
     func testTheNameIsUsedInTheGreetingAndSurvivesARelaunch() {
@@ -122,8 +124,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
             || span.app.staticTexts["Good evening, Amey"].exists,
             "the greeting does not use the name that was just set")
 
-        span.app.terminate()
-        span.app.launch()
+        span.relaunch()
         span.select("settings")
         XCTAssertEqual(span.textField("settings.userName").value as? String, "Amey",
                        "the name was not saved")
@@ -146,45 +147,45 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.launch()
         span.select("settings")
 
-        let picker = span.control("settings.idleThreshold")
-        picker.waitToAppear(10, "the idle threshold picker is missing")
+        let picker = try! XCTUnwrap(span.popUpButton(showing: "5m"),
+                                    "the idle threshold menu is missing")
         picker.click()
-
         let tenMinutes = span.app.menuItems["10m"]
-        if tenMinutes.waitForExistence(timeout: 5) {
-            tenMinutes.click()
-            span.app.terminate()
-            span.app.launch()
-            span.select("settings")
-            XCTAssertEqual(span.control("settings.idleThreshold").value as? String, "10m",
-                           "the idle threshold was not remembered")
-        } else {
-            span.app.typeKey(.escape, modifierFlags: [])
-        }
+        tenMinutes.waitToAppear(10, "the idle threshold menu has no 10m option")
+        tenMinutes.click()
+
+        span.relaunch()
+        span.select("settings")
+        XCTAssertNotNil(span.popUpButton(showing: "10m"),
+                        "the idle threshold was not remembered across a relaunch")
     }
 
     func testTheDailyTargetCanBeChanged() {
         span = SpanApp().launch()
         span.select("settings")
 
-        let picker = span.control("settings.dailyTarget")
-        picker.waitToAppear(10)
+        let picker = try! XCTUnwrap(span.popUpButton(showing: "5h"),
+                                    "the daily target menu is missing")
         picker.click()
-
         let fourHours = span.app.menuItems["4h"]
-        if fourHours.waitForExistence(timeout: 5) {
-            fourHours.click()
-            XCTAssertEqual(span.control("settings.dailyTarget").value as? String, "4h")
-        } else {
-            span.app.typeKey(.escape, modifierFlags: [])
-        }
+        fourHours.waitToAppear(10, "the daily target menu has no 4h option")
+        fourHours.click()
+
+        XCTAssertNotNil(span.popUpButton(showing: "4h"), "the daily target did not change")
     }
 
-    func testTheAccessibilityButtonsArePresent() {
+    func testTheAccessibilityRowReflectsThePermissionState() {
         span = SpanApp().launch()
         span.select("settings")
-        XCTAssertTrue(span.button("settings.openSystemSettings").waitForExistence(timeout: 10),
-                      "the Open System Settings button is missing")
+
+        // Granted shows a confirmation; not granted offers the two buttons.
+        // Which one depends on the machine, so accept either — but not neither.
+        let granted = span.app.staticTexts["Granted"].waitForExistence(timeout: 10)
+        let grant = span.button("settings.grantAccessibility").exists
+        let openSettings = span.button("settings.openSystemSettings").exists
+
+        XCTAssertTrue(granted || (grant && openSettings),
+                      "the accessibility row shows neither a granted state nor a way to grant")
     }
 
     func testTheGuideAndInsightsPanesRender() {
