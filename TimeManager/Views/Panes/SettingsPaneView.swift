@@ -14,8 +14,12 @@ struct SettingsPaneView: View {
     @AppStorage("userName") private var userName = ""
     @AppStorage("personalNote") private var personalNote = ""
     @AppStorage("update.checkAutomatically") private var checksForUpdates = true
-    @State private var isConfirmingActivityDelete = false
-    @State private var isConfirmingReset = false
+    /// Which destructive action is awaiting confirmation, if any.
+    private enum PendingErase: String, Identifiable {
+        case activity, everything
+        var id: String { rawValue }
+    }
+    @State private var pendingErase: PendingErase?
     @State private var notificationsEnabled = false
 
     private static let targets = [120, 180, 240, 300, 360, 420, 480]
@@ -240,32 +244,54 @@ struct SettingsPaneView: View {
 
             row("Tracked activity",
                 detail: "Removes the record of which apps were frontmost. Your sessions, blocks and categories are left alone.") {
-                Button("Delete…") { isConfirmingActivityDelete = true }
-            }
-            .confirmationDialog("Delete all tracked activity?",
-                                isPresented: $isConfirmingActivityDelete) {
-                Button("Delete activity", role: .destructive) {
-                    model.deleteActivity(onlyToday: false)
+                Button(role: .destructive) {
+                    pendingErase = .activity
+                } label: {
+                    Label("Delete…", systemImage: "trash")
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("The timeline's activity rail will be empty. Sessions and blocks are not affected. This cannot be undone.")
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
 
             Divider()
 
             row("Reset Span",
                 detail: "Erases everything — sessions, blocks, categories, app rules and every preference — and starts the setup questions again.") {
-                Button("Reset…", role: .destructive) { isConfirmingReset = true }
-            }
-            .confirmationDialog("Reset Span completely?",
-                                isPresented: $isConfirmingReset) {
-                Button("Erase everything", role: .destructive) {
-                    model.resetEverything()
+                Button(role: .destructive) {
+                    pendingErase = .everything
+                } label: {
+                    Label("Reset…", systemImage: "exclamationmark.arrow.circlepath")
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Every session, block, category and preference will be removed and Span will start as if freshly installed. This cannot be undone.")
+                .buttonStyle(.bordered)
+                .tint(.red)
+            }
+        }
+        .sheet(item: $pendingErase) { pending in
+            switch pending {
+            case .activity:
+                DestructiveConfirmation(
+                    title: "Delete all tracked activity?",
+                    message: "Every record of which app was frontmost, and every break, will be removed. The timeline's activity rail will be empty. Your sessions, blocks and categories are not affected.",
+                    phrase: "delete activity",
+                    confirmLabel: "Delete activity",
+                    onConfirm: {
+                        model.deleteActivity(onlyToday: false)
+                        pendingErase = nil
+                    },
+                    onCancel: { pendingErase = nil }
+                )
+            case .everything:
+                DestructiveConfirmation(
+                    title: "Reset Span completely?",
+                    message: "Every session and its review, every block you wrote, every category and app rule, and all your preferences will be erased. Span will start as if freshly installed and ask the setup questions again.",
+                    phrase: "delete everything",
+                    confirmLabel: "Erase everything",
+                    onConfirm: {
+                        model.resetEverything()
+                        pendingErase = nil
+                    },
+                    onCancel: { pendingErase = nil }
+                )
             }
         }
     }
