@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 
 enum Destination: String, Hashable, CaseIterable, Identifiable {
-    case focus, timeline, day, insights, categories, settings
+    case focus, timeline, day, insights, categories, guide, settings
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .timeline: "Timeline"
         case .day: "Day"
         case .insights: "Insights"
+        case .guide: "Guide"
         case .settings: "Settings"
         case .categories: "Categories"
         }
@@ -23,6 +24,7 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
         case .timeline: "calendar.day.timeline.left"
         case .day: "square.grid.2x2"
         case .insights: "chart.bar"
+        case .guide: "book"
         case .settings: "gearshape"
         case .categories: "circle.grid.3x3"
         }
@@ -33,6 +35,7 @@ struct RootView: View {
 
     @Environment(AppModel.self) private var model
 
+    @AppStorage("hasSeenGuide") private var hasSeenGuide = false
     @State private var destination: Destination = .focus
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isStartingSession = false
@@ -53,6 +56,11 @@ struct RootView: View {
             StatusBarView()
         }
         .frame(minWidth: 940, minHeight: 600)
+        .task {
+            guard !hasSeenGuide else { return }
+            destination = .guide
+            hasSeenGuide = true
+        }
         .sheet(isPresented: $isStartingSession) {
             StartSessionView { title, category, minutes in
                 model.startSession(title: title, category: category, minutes: minutes)
@@ -94,6 +102,8 @@ struct RootView: View {
             DayReviewView(day: model.selectedDate)
         case .insights:
             InsightsView(anchor: model.selectedDate)
+        case .guide:
+            GuideView()
         case .settings:
             SettingsPaneView()
         case .categories:
@@ -115,11 +125,13 @@ struct RootView: View {
                 Image(systemName: "chevron.left")
             }
             .help("Previous day")
+            .keyboardShortcut("[", modifiers: .command)
 
             Button { shift(selectedDate, by: 1) } label: {
                 Image(systemName: "chevron.right")
             }
             .help("Next day")
+            .keyboardShortcut("]", modifiers: .command)
             .disabled(Calendar.current.isDateInToday(selectedDate.wrappedValue))
 
             DateNavigator(date: selectedDate)
@@ -153,6 +165,7 @@ struct RootView: View {
                 Label("Start Session", systemImage: "play.fill")
             }
             .disabled(model.activeSession != nil)
+            .keyboardShortcut("n", modifiers: .command)
             .help("Start a focus session")
         }
     }

@@ -24,6 +24,7 @@ struct DayTimelineView: View {
     @State private var dragOrigin: (start: Date, end: Date)?
     @State private var hoveredRail: TimelineBlock?
     @State private var inspectorY: CGFloat = 0
+    @State private var hoveredCard: String?
 
     private static let gutterWidth: CGFloat = 52
     /// Wide enough to read as a continuous band of the day rather than a line
@@ -248,11 +249,15 @@ struct DayTimelineView: View {
         let width = laneWidth / CGFloat(placed.laneCount)
         let entry = entry(for: placed.block)
 
+        let target = resizable(for: placed.block)
+        let isHovered = hoveredCard == placed.block.id
+
         CardBlockView(block: placed.block, height: placed.height)
             .frame(width: max(24, width - 3), height: placed.height, alignment: .topLeading)
             .contentShape(Rectangle())
-            .overlay(alignment: .top) { resizeHandle(entry, edge: .top) }
-            .overlay(alignment: .bottom) { resizeHandle(entry, edge: .bottom) }
+            .onHover { hoveredCard = $0 ? placed.block.id : nil }
+            .overlay(alignment: .top) { resizeHandle(target, isHovered: isHovered, edge: .top) }
+            .overlay(alignment: .bottom) { resizeHandle(target, isHovered: isHovered, edge: .bottom) }
             .offset(x: laneX + width * CGFloat(placed.lane), y: placed.y)
             .onTapGesture {
                 inspectorY = placed.y
@@ -351,37 +356,102 @@ struct DayTimelineView: View {
 
     private enum Edge { case top, bottom }
 
-    @ViewBuilder
-    private func resizeHandle(_ entry: TimeEntry?, edge: Edge) -> some View {
-        if let entry {
-            Color.clear
-                .contentShape(Rectangle())
-                .frame(height: Self.handleHeight)
-                .onHover { inside in
-                    if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+    /// Anything on the timeline whose extent the user may drag.
+    ///
+    /// A session's extent lives in its segments rather than in two plain
+    /// fields, so both ends are written through to the first and last segment
+    /// as well — otherwise the block would snap back on the next redraw, since
+    /// that is what it is drawn from.
+    private struct Resizable {
+        let start: () -> Date
+        let end: () -> Date
+        let setStart: (Date) -> Void
+        let setEnd: (Date) -> Void
+
+        init(entry: TimeEntry) {
+            start = { entry.startedAt }
+            end = { entry.endedAt }
+            setStart = { entry.startedAt = $0 }
+            setEnd = { entry.endedAt = $0 }
+        }
+
+        init(session: WorkSession) {
+            start = { session.startedAt }
+            end = { session.endedAt ?? .now }
+            setStart = { moment in
+                session.startedAt = moment
+                if let first = session.segments.min(by: { $0.startedAt < $1.startedAt }) {
+                    first.startedAt = moment
                 }
-                .gesture(
-                    DragGesture(minimumDistance: 2)
-                        .onChanged { value in
-                            if dragOrigin == nil {
-                                dragOrigin = (entry.startedAt, entry.endedAt)
-                            }
-                            guard let origin = dragOrigin else { return }
-                            let delta = TimeInterval(value.translation.height / hourHeight) * 3600
-                            switch edge {
-                            case .top:
-                                let moved = geometry.snapped(origin.start.addingTimeInterval(delta))
-                                entry.startedAt = min(moved, origin.end.addingTimeInterval(-5 * 60))
-                            case .bottom:
-                                let moved = geometry.snapped(origin.end.addingTimeInterval(delta))
-                                entry.endedAt = max(moved, origin.start.addingTimeInterval(5 * 60))
-                            }
+            }
+            setEnd = { moment in
+                session.endedAt = moment
+                let last = session.segments
+                    .max { ($0.endedAt ?? $0.startedAt) < ($1.endedAt ?? $1.startedAt) }
+                last?.endedAt = moment
+            }
+        }
+    }
+
+    /// A running session has no fixed end to drag, so only finished work is
+    /// resizable.
+    private func resizable(for block: TimelineBlock) -> Resizable? {
+        if let entry = entry(for: block) { return Resizable(entry: entry) }
+        if let session = session(for: block), session.status == .completed {
+            return Resizable(session: session)
+        }
+        return nil
+    }
+
+    private func session(for block: TimelineBlock) -> WorkSession? {
+        guard block.kind == .session else { return nil }
+        return sessions.first { block.id.hasPrefix("session-\($0.id)") }
+    }
+
+    @ViewBuilder
+    private func resizeHandle(_ target: Resizable?, isHovered: Bool, edge: Edge) -> some View {
+        if let target {
+            ZStack {
+                Color.clear
+                // A visible grip, so it is discoverable rather than something
+                // you have to know is there.
+                if isHovered {
+                    Capsule()
+                        .fill(Theme.label.opacity(0.55))
+                        .frame(width: 26, height: 3)
+                }
+            }
+            .contentShape(Rectangle())
+            .frame(height: Self.handleHeight)
+            .onHover { inside in
+                // set(), not push()/pop(): a drag that ends outside the view
+                // never delivers the matching exit, and an unbalanced stack
+                // leaves the resize cursor stuck across the whole app.
+                if inside { NSCursor.resizeUpDown.set() } else { NSCursor.arrow.set() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged { value in
+                        if dragOrigin == nil {
+                            dragOrigin = (target.start(), target.end())
                         }
-                        .onEnded { _ in
-                            dragOrigin = nil
-                            try? context.save()
+                        guard let origin = dragOrigin else { return }
+                        let delta = TimeInterval(value.translation.height / hourHeight) * 3600
+                        switch edge {
+                        case .top:
+                            let moved = geometry.snapped(origin.start.addingTimeInterval(delta))
+                            target.setStart(min(moved, origin.end.addingTimeInterval(-5 * 60)))
+                        case .bottom:
+                            let moved = geometry.snapped(origin.end.addingTimeInterval(delta))
+                            target.setEnd(max(moved, origin.start.addingTimeInterval(5 * 60)))
                         }
-                )
+                    }
+                    .onEnded { _ in
+                        dragOrigin = nil
+                        NSCursor.arrow.set()
+                        try? context.save()
+                    }
+            )
         }
     }
 

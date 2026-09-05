@@ -15,6 +15,7 @@ struct SidebarView: View {
                 row(.categories)
             }
             Section {
+                row(.guide)
                 row(.settings)
             }
         }
