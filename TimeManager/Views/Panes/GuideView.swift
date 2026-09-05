@@ -20,10 +20,13 @@ struct GuideView: View {
                 review
                 surfaces
                 tuning
+                personal
                 shortcuts
                 privacy
             }
-            .padding(Theme.Space.xl)
+            .padding(.horizontal, Theme.Space.xl)
+            .padding(.top, Theme.Space.xxl)
+            .padding(.bottom, Theme.Space.xxl)
             .frame(maxWidth: 720, alignment: .leading)
         }
         .background(Theme.canvas)
@@ -33,8 +36,13 @@ struct GuideView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text("Guide")
+                .font(Theme.Font.sectionHeader)
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.accent)
             Text("How Span works")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 26, weight: .semibold))
             Text("""
             Span answers one question: where did the day actually go? It \
             does that by putting three different kinds of time on a single \
@@ -59,6 +67,7 @@ struct GuideView: View {
             bullet("The narrow rail on the left is what your Mac was doing — one continuous band, coloured by category. It never overlaps, because only one app is ever in front.")
             bullet("The wide lane holds sessions and the blocks you add yourself. These can overlap, and when they do they split into columns the way calendar events do.")
             bullet("The red line is now. It only appears on today.")
+            GuideDiagram.timeline
             para("Hover anywhere on the rail to see what that stretch was, including the document or page when window titles are available. The legend along the top names the colours with their totals, so you rarely need to hover at all. Click any block in the wide lane to open it beside itself.")
             note("Short blocks are drawn slightly taller than their true length so they stay readable and clickable. In a busy stretch that nudges blocks apart by a minute or two — the same trade calendars make. Zoom in from the toolbar to see true proportions.")
         }
@@ -71,6 +80,7 @@ struct GuideView: View {
             bullet("Open a block to set exact start and end times, so you are never stuck with wherever the drag landed.")
             bullet("Finished sessions resize the same way. If you kept working past the end of one, pull its bottom edge down rather than logging a second block.")
             bullet("⌘B adds a block at the current time without dragging.")
+            GuideDiagram.dragToCreate
         }
     }
 
@@ -107,6 +117,7 @@ struct GuideView: View {
             bullet("The menu bar shows the running session's remaining time, and its panel can start, pause and finish one.")
             bullet("The HUD is the small capsule below the menu bar: time since your last break, focus today, and how close you are to your target. Clicking it never takes focus away from whatever you are working in.")
             bullet("Drag the HUD anywhere along the top of the screen; it remembers where you put it. Hide it from Settings, the status bar, or its own menu.")
+            GuideDiagram.hud
         }
     }
 
@@ -122,6 +133,13 @@ struct GuideView: View {
                     "Turns app-level tracking into document-level tracking. Worth it if you want to know which project you were in; skip it if window titles in your work are sensitive.")
             setting("Session end reminder",
                     "A notification when a timed session runs out, so you can leave the window closed.")
+        }
+    }
+
+    private var personal: some View {
+        card("Making it yours", nil) {
+            para("Span asks for your name when you first run it, and greets you with it on the Focus pane. It is stored on this Mac and never sent anywhere.")
+            para("You can also set a line of your own — a reason, a reminder, something you are working towards. It appears on the Focus pane and again when you start a session, which is the moment it is most likely to matter. Both are editable in Settings, and both can be left empty.")
         }
     }
 

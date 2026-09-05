@@ -36,6 +36,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
 
     @AppStorage("hasSeenGuide") private var hasSeenGuide = false
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
+    @State private var isOnboarding = false
     @State private var destination: Destination = .focus
 
     private static let sidebarWidth: CGFloat = 216
@@ -67,9 +69,18 @@ struct RootView: View {
         .frame(minWidth: Self.sidebarWidth + Self.centreMinimum + Self.timelineMinimum + 80,
                minHeight: 620)
         .task {
-            guard !hasSeenGuide else { return }
-            destination = .guide
-            hasSeenGuide = true
+            guard !hasOnboarded else { return }
+            isOnboarding = true
+        }
+        .sheet(isPresented: $isOnboarding) {
+            OnboardingView { openGuide in
+                hasOnboarded = true
+                hasSeenGuide = true
+                isOnboarding = false
+                if openGuide { destination = .guide }
+            }
+            .environment(model)
+            .interactiveDismissDisabled()
         }
         .sheet(isPresented: $isStartingSession) {
             StartSessionView { title, category, minutes in

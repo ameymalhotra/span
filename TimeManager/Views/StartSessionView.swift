@@ -8,6 +8,7 @@ struct StartSessionView: View {
     /// convenience of a picker without the model needing a category entity.
     @Query(sort: \WorkSession.startedAt, order: .reverse) private var sessions: [WorkSession]
 
+    @AppStorage("personalNote") private var personalNote = ""
     @State private var title = ""
     @State private var category = "Deep Work"
     @AppStorage("defaultSessionMinutes") private var minutes = 60
@@ -31,9 +32,18 @@ struct StartSessionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("New session")
-                .font(.system(size: 15, weight: .semibold))
-                .padding(Theme.Space.l)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text("New session")
+                    .font(.system(size: 15, weight: .semibold))
+                if !personalNote.isEmpty {
+                    Text(personalNote)
+                        .font(Theme.Font.caption)
+                        .italic()
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(Theme.Space.l)
 
             Divider()
 

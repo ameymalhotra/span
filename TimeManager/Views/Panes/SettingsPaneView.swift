@@ -11,6 +11,8 @@ struct SettingsPaneView: View {
     @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 60
     @AppStorage("idleThresholdMinutes") private var idleThresholdMinutes = 5
     @AppStorage("hud.visible") private var hudVisible = true
+    @AppStorage("userName") private var userName = ""
+    @AppStorage("personalNote") private var personalNote = ""
     @State private var notificationsEnabled = false
 
     private static let targets = [120, 180, 240, 300, 360, 420, 480]
@@ -18,6 +20,7 @@ struct SettingsPaneView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                you
                 goals
                 categoriesSection
                 tracking
@@ -39,6 +42,27 @@ struct SettingsPaneView: View {
     }
 
     // MARK: - Sections
+
+    private var you: some View {
+        section("You") {
+            row("Name", detail: "Used for the greeting on the Focus pane. Never leaves this Mac.") {
+                TextField("Your name", text: $userName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+            }
+
+            Divider()
+
+            stackedRow("Your line",
+                       detail: "Shown on the Focus pane and when you start a session. A reason, a reminder, something you are working towards.") {
+                TextField("Finish the thing before starting the next one.",
+                          text: $personalNote, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...3)
+            }
+        }
+    }
+
 
     private var categoriesSection: some View {
         section("Categories") {

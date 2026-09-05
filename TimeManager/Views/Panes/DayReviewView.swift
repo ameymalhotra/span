@@ -138,11 +138,11 @@ struct MetricTile: View {
             Text(label)
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.secondaryLabel)
-            if let caption {
-                Text(caption)
-                    .font(Theme.Font.micro)
-                    .foregroundStyle(Theme.tertiaryLabel)
-            }
+            // Always rendered, even when empty: a tile with a caption would
+            // otherwise be taller than the ones beside it.
+            Text(caption ?? " ")
+                .font(Theme.Font.micro)
+                .foregroundStyle(Theme.tertiaryLabel)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Theme.Space.m)

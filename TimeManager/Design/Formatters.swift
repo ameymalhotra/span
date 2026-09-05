@@ -52,6 +52,15 @@ enum Format {
         String(weekdayFormatter.string(from: date).prefix(1))
     }
 
+    /// "Good morning" / "Good afternoon" / "Good evening", with the name when
+    /// there is one.
+    static func greeting(_ name: String, at date: Date = .now) -> String {
+        let hour = Calendar.current.component(.hour, from: date)
+        let part = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening")
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? part : "\(part), \(trimmed)"
+    }
+
     static func percent(_ fraction: Double) -> String {
         if fraction <= 0 { return "0%" }
         if fraction < 0.01 { return "< 1%" }

@@ -7,44 +7,44 @@ struct StatusBarView: View {
     @AppStorage("hud.visible") private var isHUDVisible = true
 
     var body: some View {
-        HStack(spacing: Theme.Space.m) {
-            HStack(spacing: Theme.Space.s) {
-                Circle()
-                    .fill(indicatorColor)
-                    .frame(width: 7, height: 7)
-                Text(statusText)
-                    .font(Theme.Font.caption)
-                    .foregroundStyle(Theme.secondaryLabel)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: Theme.Space.l)
-
+        ZStack {
             Text("Focus \(model.focusTodayText) · \(model.percentOfTargetText) of target")
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.secondaryLabel)
                 .lineLimit(1)
 
-            Spacer(minLength: Theme.Space.l)
+            HStack(spacing: Theme.Space.m) {
+                HStack(spacing: Theme.Space.s) {
+                    Circle()
+                        .fill(indicatorColor)
+                        .frame(width: 7, height: 7)
+                    Text(statusText)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryLabel)
+                        .lineLimit(1)
+                }
 
-            Toggle(isOn: Binding(
-                get: { !model.tracker.isPaused },
-                set: { model.tracker.isPaused = !$0 }
-            )) {
-                Text("Tracking")
-                    .font(Theme.Font.caption)
-            }
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .help("Pause or resume automatic activity tracking")
+                Spacer(minLength: Theme.Space.l)
 
-            Button {
-                isHUDVisible.toggle()
-            } label: {
-                Image(systemName: isHUDVisible ? "rectangle.topthird.inset.filled" : "rectangle")
+                Toggle(isOn: Binding(
+                    get: { !model.tracker.isPaused },
+                    set: { model.tracker.isPaused = !$0 }
+                )) {
+                    Text("Tracking")
+                        .font(Theme.Font.caption)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .help("Pause or resume automatic activity tracking")
+
+                Button {
+                    isHUDVisible.toggle()
+                } label: {
+                    Image(systemName: isHUDVisible ? "rectangle.topthird.inset.filled" : "rectangle")
+                }
+                .buttonStyle(.accessoryBar)
+                .help(isHUDVisible ? "Hide the floating HUD" : "Show the floating HUD")
             }
-            .buttonStyle(.accessoryBar)
-            .help(isHUDVisible ? "Hide the floating HUD" : "Show the floating HUD")
         }
         .padding(.horizontal, Theme.Space.m)
         .frame(height: 30)

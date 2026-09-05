@@ -5,6 +5,9 @@ import SwiftUI
 struct FocusPaneView: View {
     @Environment(AppModel.self) private var model
 
+    @AppStorage("userName") private var userName = ""
+    @AppStorage("personalNote") private var personalNote = ""
+
     let onStart: () -> Void
     let onFinish: () -> Void
 
@@ -30,7 +33,7 @@ struct FocusPaneView: View {
                 .font(.system(size: 40, weight: .thin))
                 .foregroundStyle(Theme.tertiaryLabel)
             VStack(spacing: Theme.Space.xs) {
-                Text("Make time intentional")
+                Text(Format.greeting(userName))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Theme.label)
                 Text("Start a focused session, then give yourself an honest review when it ends.")
@@ -43,6 +46,16 @@ struct FocusPaneView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .keyboardShortcut("n", modifiers: .command)
+
+            if !personalNote.isEmpty {
+                Text(personalNote)
+                    .font(Theme.Font.body)
+                    .italic()
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 340)
+                    .padding(.top, Theme.Space.s)
+            }
         }
         .padding(Theme.Space.xxl)
     }
