@@ -172,7 +172,8 @@ final class ActivityTracker: NSObject {
                 isIdle = false
                 lastBreakEnded = now
             }
-            guard let app = NSWorkspace.shared.frontmostApplication else { return }
+            guard let app = NSWorkspace.shared.frontmostApplication,
+                  app.activationPolicy == .regular else { return }
             let bundleID = app.bundleIdentifier
             guard !(bundleID.map(excludedBundleIdentifiers.contains) ?? false) else {
                 closeSpan(at: now, force: true)

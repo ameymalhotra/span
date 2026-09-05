@@ -832,6 +832,7 @@ private struct LegendDetail: View {
                 Text(app.name)
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.secondaryLabel)
+                    .lineLimit(1)
                 Text(Format.compact(app.duration))
                     .font(Theme.Font.micro.monospacedDigit())
                     .foregroundStyle(Theme.tertiaryLabel)

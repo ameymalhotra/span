@@ -19,6 +19,8 @@ struct CategoryPicker: View {
                     .frame(width: 10, height: 10)
                 Text(selection.isEmpty ? "Uncategorised" : selection)
                     .foregroundStyle(selection.isEmpty ? Theme.tertiaryLabel : Theme.label)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: Theme.Space.xs)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9, weight: .semibold))
@@ -26,6 +28,9 @@ struct CategoryPicker: View {
             }
             .padding(.horizontal, Theme.Space.s)
             .padding(.vertical, 4)
+            // Fills whatever width it is given rather than shrinking to its
+            // label, so a column of pickers lines up.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.hairline, lineWidth: 0.5)

@@ -70,13 +70,14 @@ struct AppGroupingManager: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(app.name)
                     .font(Theme.Font.body)
+                    .lineLimit(1)
                 Text(Format.compact(app.total))
                     .font(Theme.Font.caption.monospacedDigit())
                     .foregroundStyle(Theme.tertiaryLabel)
             }
-            Spacer(minLength: Theme.Space.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
             CategoryPicker(selection: binding(for: app))
-                .frame(minWidth: 130, maxWidth: 190)
+                .frame(width: 186)
         }
     }
 
