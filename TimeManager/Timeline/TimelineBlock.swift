@@ -94,6 +94,49 @@ extension TimelineBlock {
         )
     }
 
+    /// Merges consecutive records for the same app into one block.
+    ///
+    /// The tracker writes a record per app or title change, so a morning in one
+    /// editor becomes dozens of rows. Drawn literally they are unreadable
+    /// slivers; merged, they read as the band of time they actually were.
+    static func mergedActivityBlocks(
+        _ records: [ActivityRecord],
+        gapTolerance: TimeInterval = 90
+    ) -> [TimelineBlock] {
+        let sorted = records.sorted { $0.startedAt < $1.startedAt }
+        var merged: [TimelineBlock] = []
+        var run: (record: ActivityRecord, start: Date, end: Date)?
+
+        func flush() {
+            guard let run else { return }
+            merged.append(TimelineBlock(
+                id: "activity-\(run.record.id)",
+                kind: run.record.isIdle ? .idle : .activity,
+                title: run.record.isIdle ? "Away" : run.record.appName,
+                subtitle: run.record.windowTitle ?? run.record.url,
+                category: run.record.categoryName ?? run.record.appName,
+                start: run.start,
+                end: run.end,
+                focusRating: nil
+            ))
+        }
+
+        for record in sorted {
+            if var open = run,
+               open.record.appName == record.appName,
+               open.record.isIdle == record.isIdle,
+               record.startedAt.timeIntervalSince(open.end) <= gapTolerance {
+                open.end = max(open.end, record.endedAt)
+                run = open
+                continue
+            }
+            flush()
+            run = (record, record.startedAt, record.endedAt)
+        }
+        flush()
+        return merged
+    }
+
     static func block(for record: ActivityRecord) -> TimelineBlock {
         TimelineBlock(
             id: "activity-\(record.id)",

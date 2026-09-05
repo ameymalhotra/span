@@ -10,6 +10,7 @@ enum ModelStack {
         SessionSegment.self,
         ActivityRecord.self,
         TimeEntry.self,
+        TimeCategory.self,
     ])
 
     static func makeContainer() -> ModelContainer {
@@ -63,6 +64,23 @@ enum ModelStack {
             guard manager.fileExists(atPath: from.path) else { continue }
             try? manager.moveItem(at: from, to: to)
         }
+    }
+
+    /// Creates the starting categories the first time the app runs. One per
+    /// palette slot, so the initial set is fully distinguishable.
+    @MainActor
+    static func seedCategoriesIfNeeded(in context: ModelContext) {
+        let existing = (try? context.fetch(FetchDescriptor<TimeCategory>())) ?? []
+        guard existing.isEmpty else {
+            CategoryPalette.updateRegistry(existing)
+            return
+        }
+        let seeded = TimeCategory.defaults.enumerated().map { index, entry in
+            TimeCategory(name: entry.0, colorSlot: entry.1, sortIndex: index)
+        }
+        seeded.forEach(context.insert)
+        try? context.save()
+        CategoryPalette.updateRegistry(seeded)
     }
 
     // MARK: - Launch recovery

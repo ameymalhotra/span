@@ -1,81 +1,78 @@
 import SwiftUI
 
-/// Maps a category name to a stable colour.
-///
-/// Categories are free text — the model has always stored a bare `String` — so
-/// colours are assigned by hashing the name into a fixed palette rather than
-/// stored per category. The same category therefore keeps its colour across
-/// launches and across every view without any migration.
+/// The colours categories can take.
 enum CategoryPalette {
+
+    struct Swatch: Identifiable {
+        let slot: Int
+        let name: String
+        let light: UInt32
+        let dark: UInt32
+        var id: Int { slot }
+        var color: Color { Color.adaptive(light: light, dark: dark) }
+    }
 
     /// Seven hues, each authored separately for light and dark.
     ///
     /// The set and its order are not a matter of taste: they were checked with a
-    /// colour-vision validator, and the order is what fixes the last failure.
-    /// Green beside pink is the classic deuteranope collision (ΔE 3.5), so green
-    /// sits between blue and purple, while orange and gold — which collide with
-    /// each other — are pushed to opposite ends. Eight hues could not be
-    /// separated at all; the eighth pair was indistinguishable even to normal
-    /// vision, so the palette is seven.
-    ///
-    /// One adjacent pair (pink/teal) sits in the 6–8 ΔE band, which is only
-    /// acceptable alongside a second, non-colour channel. Every surface that
-    /// uses these provides one: timeline blocks carry a title and tooltip, and
-    /// breakdown rows are labelled with the category name.
-    private static let hues: [(light: UInt32, dark: UInt32)] = [
-        (0xC25E12, 0xD2731E),   // orange
-        (0x00909E, 0x16A6BC),   // teal
-        (0xC8356E, 0xE14D7E),   // pink
-        (0x2C6FD6, 0x4A97F0),   // blue
-        (0x1F8A4C, 0x22A76A),   // green
-        (0x8A46CE, 0x9E63E8),   // purple
-        (0x96780C, 0xA98C0C),   // gold
+    /// colour-vision validator. Green beside pink is the classic deuteranope
+    /// collision, so green sits between blue and purple, and orange and gold —
+    /// which collide with each other — are pushed to opposite ends. An eighth
+    /// hue could not be separated from its neighbour even under normal vision,
+    /// so the palette is seven.
+    static let swatches: [Swatch] = [
+        Swatch(slot: 0, name: "Orange", light: 0xC25E12, dark: 0xD2731E),
+        Swatch(slot: 1, name: "Teal",   light: 0x00909E, dark: 0x16A6BC),
+        Swatch(slot: 2, name: "Pink",   light: 0xC8356E, dark: 0xE14D7E),
+        Swatch(slot: 3, name: "Blue",   light: 0x2C6FD6, dark: 0x4A97F0),
+        Swatch(slot: 4, name: "Green",  light: 0x1F8A4C, dark: 0x22A76A),
+        Swatch(slot: 5, name: "Purple", light: 0x8A46CE, dark: 0x9E63E8),
+        Swatch(slot: 6, name: "Gold",   light: 0x96780C, dark: 0xA98C0C),
     ]
 
-    /// Reserved for uncategorised time. Deliberately outside the rotation: it is
+    /// Reserved for uncategorised time. Outside the rotation deliberately: it is
     /// below the chroma floor and reads as grey, which is the point — absence of
     /// a category should not look like just another category.
     private static let neutral = (light: UInt32(0x5A6270), dark: UInt32(0x9BA4B4))
 
-    /// Fixed slots for the categories the app itself produces.
-    ///
-    /// Hashing alone is not enough: seven slots and eight built-in categories
-    /// means collisions are guaranteed by pigeonhole, and in practice they
-    /// clustered badly — four of the built-ins landed on gold. Pinning the
-    /// common ones guarantees the categories a real day is mostly made of are
-    /// all distinguishable, and leaves hashing to cover the long tail.
-    private static let fixed: [String: Int] = [
-        "deep work": 4,   // green
-        "building": 3,    // blue
-        "talking": 0,     // orange
-        "meetings": 2,    // pink
-        "browsing": 1,    // teal
-        "reading": 5,     // purple
-        "designing": 6,   // gold
-    ]
+    /// Name → slot, refreshed from the store whenever categories change. Views
+    /// resolve colours synchronously while drawing, so this cannot be a fetch.
+    nonisolated(unsafe) private static var registry: [String: Int] = [:]
+
+    static func updateRegistry(_ categories: [TimeCategory]) {
+        registry = Dictionary(
+            categories.map { ($0.name.trimmingCharacters(in: .whitespaces).lowercased(), $0.colorSlot) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    static func color(slot: Int) -> Color {
+        let swatch = swatches[((slot % swatches.count) + swatches.count) % swatches.count]
+        return swatch.color
+    }
 
     static func color(for name: String?) -> Color {
-        guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return Color.adaptive(light: neutral.light, dark: neutral.dark)
-        }
-        let hue = hues[slot(for: name)]
-        return Color.adaptive(light: hue.light, dark: hue.dark)
-    }
-
-    private static func slot(for name: String) -> Int {
+        guard let name else { return neutralColor }
         let key = name.trimmingCharacters(in: .whitespaces).lowercased()
-        return fixed[key] ?? index(for: name)
+        guard !key.isEmpty else { return neutralColor }
+        if let slot = registry[key] { return color(slot: slot) }
+        // A category typed in freehand and never registered still gets a stable
+        // colour rather than falling through to grey.
+        return color(slot: hashedSlot(for: key))
     }
 
-    /// Stable index derived from the name. Uses an explicit FNV-1a hash rather
-    /// than `hashValue`, which is seeded per process and would repaint every
-    /// category on each launch.
-    private static func index(for name: String) -> Int {
+    static var neutralColor: Color {
+        Color.adaptive(light: neutral.light, dark: neutral.dark)
+    }
+
+    /// Explicit FNV-1a rather than `hashValue`, which is seeded per process and
+    /// would repaint every unregistered category on each launch.
+    private static func hashedSlot(for name: String) -> Int {
         var hash: UInt64 = 0xcbf29ce484222325
-        for byte in name.lowercased().utf8 {
+        for byte in name.utf8 {
             hash ^= UInt64(byte)
             hash = hash &* 0x100000001b3
         }
-        return Int(hash % UInt64(hues.count))
+        return Int(hash % UInt64(swatches.count))
     }
 }

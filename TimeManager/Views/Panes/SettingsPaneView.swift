@@ -19,6 +19,7 @@ struct SettingsPaneView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 goals
+                categoriesSection
                 tracking
                 alerts
                 data
@@ -38,6 +39,13 @@ struct SettingsPaneView: View {
     }
 
     // MARK: - Sections
+
+    private var categoriesSection: some View {
+        section("Categories") {
+            CategoryManager()
+        }
+    }
+
 
     private var goals: some View {
         section("Focus goals") {

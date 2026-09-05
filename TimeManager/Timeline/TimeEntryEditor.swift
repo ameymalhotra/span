@@ -7,10 +7,6 @@ struct TimeEntryEditor: View {
     @Environment(\.dismiss) private var dismiss
 
     @Bindable var entry: TimeEntry
-    /// Categories already in use, so the field behaves like a picker without
-    /// the model needing a category entity.
-    let knownCategories: [String]
-
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -21,25 +17,7 @@ struct TimeEntryEditor: View {
                 .focused($titleFocused)
                 .onSubmit { commit() }
 
-            HStack(spacing: Theme.Space.s) {
-                Circle()
-                    .fill(CategoryPalette.color(for: entry.category))
-                    .frame(width: 8, height: 8)
-                TextField("Category", text: $entry.category)
-                    .textFieldStyle(.roundedBorder)
-                if !knownCategories.isEmpty {
-                    Menu {
-                        ForEach(knownCategories, id: \.self) { name in
-                            Button(name) { entry.category = name }
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                    }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .frame(width: 18)
-                }
-            }
+            CategoryPicker(selection: $entry.category)
 
             Divider()
 

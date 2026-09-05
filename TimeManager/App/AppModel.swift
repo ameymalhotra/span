@@ -55,6 +55,7 @@ final class AppModel {
     // MARK: - Lifecycle
 
     func start() {
+        ModelStack.seedCategoriesIfNeeded(in: context)
         ModelStack.recoverStaleSessions(in: context)
         refreshActiveSession()
         tracker.start()

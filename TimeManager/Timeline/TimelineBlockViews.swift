@@ -35,8 +35,8 @@ struct CardBlockView: View {
 
     /// Text is disclosed by available height rather than truncated into an
     /// unreadable sliver.
-    private var showsTitle: Bool { height >= 16 }
-    private var showsDetail: Bool { height >= 34 }
+    private var showsTitle: Bool { height >= 18 }
+    private var showsDetail: Bool { height >= 38 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {

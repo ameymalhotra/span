@@ -60,7 +60,7 @@ struct DayTimelineView: View {
         let now = Date.now
         return sessions.flatMap { TimelineBlock.blocks(for: $0, now: now) }
             + entries.map(TimelineBlock.block(for:))
-            + activity.map(TimelineBlock.block(for:))
+            + TimelineBlock.mergedActivityBlocks(activity)
     }
 
     private var isToday: Bool { Calendar.current.isDateInToday(day) }
@@ -91,7 +91,7 @@ struct DayTimelineView: View {
             TimelineBlockDetail(block: block)
         }
         .popover(item: $editingEntry) { entry in
-            TimeEntryEditor(entry: entry, knownCategories: knownCategories)
+            TimeEntryEditor(entry: entry)
         }
         .onChange(of: model.pendingBlockEdit) { _, entry in
             guard let entry else { return }
@@ -123,7 +123,7 @@ struct DayTimelineView: View {
                 creationLayer(laneX: laneX, laneWidth: laneWidth)
 
                 ForEach(ribbonBlocks) { block in
-                    let extent = geometry.extent(for: block)
+                    let extent = geometry.extent(for: block, minimumHeight: 6)
                     RibbonBlockView(block: block)
                         .frame(width: Self.railWidth, height: extent.height)
                         .offset(y: extent.y)
@@ -215,7 +215,7 @@ struct DayTimelineView: View {
 
     @ViewBuilder
     private func laneCard(_ laid: LaidOutBlock, laneX: CGFloat, laneWidth: CGFloat) -> some View {
-        let extent = geometry.extent(for: laid.block, minimumHeight: 14)
+        let extent = geometry.extent(for: laid.block, minimumHeight: 24)
         let width = laneWidth / CGFloat(laid.laneCount)
         let entry = entry(for: laid.block)
 

@@ -40,21 +40,7 @@ struct StartSessionView: View {
             Form {
                 Section("What are you working on?") {
                     TextField("e.g. Rebuild the timeline", text: $title)
-                    HStack(spacing: Theme.Space.s) {
-                        TextField("Category", text: $category)
-                        if !knownCategories.isEmpty {
-                            Menu {
-                                ForEach(knownCategories, id: \.self) { name in
-                                    Button(name) { category = name }
-                                }
-                            } label: {
-                                Image(systemName: "chevron.down")
-                            }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
-                            .frame(width: 20)
-                        }
-                    }
+                    CategoryPicker(selection: $category)
                     HStack(spacing: Theme.Space.xs) {
                         Circle()
                             .fill(CategoryPalette.color(for: category))
