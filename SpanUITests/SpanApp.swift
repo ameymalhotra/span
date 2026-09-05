@@ -95,21 +95,32 @@ struct SpanApp {
         return nil
     }
 
+    /// Scrolls the settings pane until `element` is in the accessibility tree.
+    ///
+    /// The pane is a plain ScrollView, and AppKit only vends what is on screen,
+    /// so anything below the fold does not exist as far as XCUITest is
+    /// concerned until it is scrolled into view.
+    @discardableResult
+    func reveal(_ element: XCUIElement, maxScrolls: Int = 12) -> Bool {
+        if element.exists { return true }
+        let scrollView = app.scrollViews.firstMatch
+        guard scrollView.waitForExistence(timeout: Self.timeout) else { return false }
+        for _ in 0..<maxScrolls {
+            scrollView.scroll(byDeltaX: 0, deltaY: -80)
+            if element.exists { return true }
+        }
+        return element.exists
+    }
+
     // MARK: - Navigation
 
     func select(_ destination: String, file: StaticString = #filePath, line: UInt = #line) {
-        for attempt in 0..<3 {
-            let row = app.descendants(matching: .any)["sidebar.\(destination)"]
-            guard row.waitForExistence(timeout: Self.timeout) else {
-                if attempt == 2 {
-                    XCTFail("no sidebar row for \(destination)", file: file, line: line)
-                }
-                continue
-            }
-            app.activate()
-            row.click()
-            return
-        }
+        let row = app.descendants(matching: .any)["sidebar.\(destination)"]
+        XCTAssertTrue(row.waitForExistence(timeout: Self.timeout),
+                      "no sidebar row for \(destination)", file: file, line: line)
+        // Deliberately no `activate()` here: activating between finding the row
+        // and clicking it invalidates the element XCUITest just resolved.
+        row.click()
     }
 
     func startSession(title: String, minutes: String? = nil) {
@@ -138,6 +149,7 @@ struct SpanApp {
     /// someone is also working on.
     func type(_ text: String, into element: XCUIElement,
               file: StaticString = #filePath, line: UInt = #line) {
+        if !element.exists { reveal(element) }
         element.waitToAppear(Self.timeout, "", file: file, line: line)
         for attempt in 0..<3 {
             app.activate()

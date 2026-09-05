@@ -13,6 +13,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
     func testTheDefaultCategoriesAreSeededOnAFreshStore() {
         span = SpanApp().launch()
         span.select("settings")
+        span.reveal(span.textField("categories.newName"))
         for name in ["Deep Work", "Meeting", "Learning", "Admin", "Break"] {
             XCTAssertTrue(span.app.staticTexts[name].waitForExistence(timeout: 10)
                           || span.app.textFields[name].waitForExistence(timeout: 2),
@@ -25,6 +26,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         let field = span.textField("categories.newName")
+        span.reveal(field)
         field.waitToAppear(10, "the add-category field is missing")
         span.type("Gardening", into: field)
         span.button("categories.add").click()
@@ -37,6 +39,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
     func testTheAddButtonIsDisabledWithNoName() {
         span = SpanApp().launch()
         span.select("settings")
+        span.reveal(span.textField("categories.newName"))
         span.textField("categories.newName").waitToAppear()
         XCTAssertFalse(span.button("categories.add").isEnabled,
                        "a blank category can be added")
@@ -48,6 +51,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         let field = span.textField("categories.newName")
+        span.reveal(field)
         field.waitToAppear()
         span.type("Persisted", into: field)
         span.button("categories.add").click()
@@ -66,11 +70,13 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         let field = span.textField("categories.newName")
+        span.reveal(field)
         field.waitToAppear()
         span.type("Doomed", into: field)
         span.button("categories.add").click()
 
         let delete = span.button("category.delete.Doomed")
+        span.reveal(delete)
         delete.waitToAppear(10, "the new category has no delete button")
         delete.click()
 
@@ -82,6 +88,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         let swatch = span.button("category.colour.Deep Work")
+        span.reveal(swatch)
         if swatch.waitForExistence(timeout: 10) {
             swatch.click()
             span.app.typeKey(.escape, modifierFlags: [])
@@ -96,6 +103,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         span.textField("settings.userName").waitToAppear(10, "the name field is missing")
+        span.reveal(span.control("settings.tracking"))
         XCTAssertTrue(span.control("settings.tracking").exists, "the tracking toggle is missing")
         XCTAssertTrue(span.control("settings.hud").exists, "the HUD toggle is missing")
         XCTAssertTrue(span.control("settings.notifications").exists, "the notifications toggle is missing")
@@ -135,6 +143,7 @@ final class CategoryAndSettingsUITests: XCTestCase {
         span.select("settings")
 
         let toggle = span.control("settings.tracking")
+        span.reveal(toggle)
         toggle.waitToAppear(10, "the tracking toggle is missing")
         let before = toggle.value as? Int
         toggle.click()
@@ -180,7 +189,8 @@ final class CategoryAndSettingsUITests: XCTestCase {
 
         // Granted shows a confirmation; not granted offers the two buttons.
         // Which one depends on the machine, so accept either — but not neither.
-        let granted = span.app.staticTexts["Granted"].waitForExistence(timeout: 10)
+        span.reveal(span.app.staticTexts["Granted"])
+        let granted = span.app.staticTexts["Granted"].exists
         let grant = span.button("settings.grantAccessibility").exists
         let openSettings = span.button("settings.openSystemSettings").exists
 
