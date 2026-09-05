@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 import Testing
-@testable import TimeManager
+@testable import Span
 
 // MARK: - Containers
 

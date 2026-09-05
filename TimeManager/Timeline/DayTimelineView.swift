@@ -714,32 +714,62 @@ private struct LegendDetail: View {
 
     @State private var expanded: Set<String> = []
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Text(mode == .category ? "Today by category" : "Today by app")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(.bottom, Theme.Space.xs)
+    /// Beyond this the list scrolls; below it the popover is exactly as tall as
+    /// its contents.
+    private static let maximumHeight: CGFloat = 440
 
-                ForEach(entries) { entry in
-                    row(entry)
-                    if expanded.contains(entry.name) {
-                        ForEach(entry.apps) { app in
-                            appRow(app)
-                        }
+    private var content: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text(mode == .category ? "Today by category" : "Today by app")
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.bottom, Theme.Space.xs)
+
+            ForEach(entries) { entry in
+                row(entry)
+                if expanded.contains(entry.name) {
+                    ForEach(entry.apps) { app in
+                        appRow(app)
                     }
                 }
-
-                if mode == .category {
-                    Text("Open a category to see which apps it holds, and move any that are filed wrongly.")
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(Theme.tertiaryLabel)
-                        .padding(.top, Theme.Space.xs)
-                }
             }
-            .padding(Theme.Space.l)
+
+            if mode == .category {
+                Text("Open a category to see which apps it holds, and move any that are filed wrongly.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .padding(.top, Theme.Space.xs)
+            }
         }
-        .frame(width: 340, height: min(460, CGFloat(entries.count) * 36 + 130))
+        .padding(Theme.Space.l)
+    }
+
+    var body: some View {
+        // A ScrollView is greedy — given one, the popover takes whatever height
+        // it is offered and leaves the rest empty. Short lists are laid out
+        // plainly so the popover fits them, and only a list that would overflow
+        // gets a scroller.
+        Group {
+            if estimatedHeight > Self.maximumHeight {
+                ScrollView { content }
+                    .frame(height: Self.maximumHeight)
+            } else {
+                content
+            }
+        }
+        .frame(width: 340)
+    }
+
+    /// Close enough to decide whether scrolling is needed; the exact height
+    /// comes from layout in the common case.
+    private var estimatedHeight: CGFloat {
+        let expandedApps = entries
+            .filter { expanded.contains($0.name) }
+            .reduce(0) { $0 + $1.apps.count }
+        let header: CGFloat = 30
+        let rows = CGFloat(entries.count) * 26
+        let appRows = CGFloat(expandedApps) * 34
+        let footer: CGFloat = mode == .category ? 40 : 0
+        return header + rows + appRows + footer + Theme.Space.l * 2
     }
 
     /// Grouping by app leaves nothing to expand, so those rows are plain text
