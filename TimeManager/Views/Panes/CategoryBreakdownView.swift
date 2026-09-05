@@ -26,12 +26,11 @@ struct CategoryBreakdownView: View {
     }
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            PaneHeader(title: "Categories", subtitle: Format.dayTitle(day))
+            Divider()
+            ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                Text("Categories · \(Format.dayTitle(day))")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.label)
-
                 if report.categories.isEmpty {
                     Text("Nothing tracked on this day yet.")
                         .font(Theme.Font.body)
@@ -43,9 +42,10 @@ struct CategoryBreakdownView: View {
                     }
                 }
             }
-            .padding(.horizontal, Theme.Space.page)
-            .padding(.top, Theme.Space.page)
-            .padding(.bottom, Theme.Space.xxl)
+                .padding(.horizontal, Theme.Space.page)
+                .padding(.top, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.xxl)
+            }
         }
         .background(Theme.canvas)
     }

@@ -18,7 +18,10 @@ struct SettingsPaneView: View {
     private static let targets = [120, 180, 240, 300, 360, 420, 480]
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            PaneHeader(title: "Settings")
+            Divider()
+            ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxl) {
                 you
                 goals
@@ -27,9 +30,10 @@ struct SettingsPaneView: View {
                 alerts
                 data
             }
-            .padding(.horizontal, Theme.Space.page)
-            .padding(.top, Theme.Space.page)
-            .padding(.bottom, Theme.Space.xxl)
+                .padding(.horizontal, Theme.Space.page)
+                .padding(.top, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.xxl)
+            }
         }
         .background(Theme.canvas)
         .task {

@@ -9,7 +9,10 @@ import SwiftUI
 struct GuideView: View {
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            PaneHeader(title: "Guide", subtitle: "How Span works")
+            Divider()
+            ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 intro
                 sessions
@@ -28,6 +31,7 @@ struct GuideView: View {
             .padding(.top, Theme.Space.page)
             .padding(.bottom, Theme.Space.page)
             .frame(maxWidth: 720, alignment: .leading)
+            }
         }
         .background(Theme.canvas)
     }
@@ -36,13 +40,8 @@ struct GuideView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text("Guide")
-                .font(Theme.Font.sectionHeader)
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(Theme.accent)
-            Text("How Span works")
-                .font(.system(size: 26, weight: .semibold))
+            Text("Where the day went")
+                .font(.system(size: 24, weight: .semibold))
             Text("""
             Span answers one question: where did the day actually go? It \
             does that by putting three different kinds of time on a single \

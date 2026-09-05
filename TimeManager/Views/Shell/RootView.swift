@@ -61,9 +61,6 @@ struct RootView: View {
                 Divider()
                 detail(selectedDate: $model.selectedDate)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Belt and braces: if a pane is ever squeezed below its
-                    // minimum anyway, it must not paint over the sidebar.
-                    .clipped()
             }
             Divider()
             StatusBarView()
@@ -107,10 +104,8 @@ struct RootView: View {
                 HSplitView {
                     centerPane
                         .frame(minWidth: Self.centreMinimum, idealWidth: 540)
-                        .clipped()
                     timeline(for: selectedDate.wrappedValue)
                         .frame(minWidth: Self.timelineMinimum, idealWidth: 360, maxWidth: 640)
-                        .clipped()
                 }
             }
         }

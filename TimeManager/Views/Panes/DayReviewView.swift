@@ -26,24 +26,24 @@ struct DayReviewView: View {
     }
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            PaneHeader(title: Format.dayTitle(day))
+            Divider()
+            ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 metrics
                 completedSessions
             }
-            .padding(.horizontal, Theme.Space.page)
-            .padding(.top, Theme.Space.page)
-            .padding(.bottom, Theme.Space.xxl)
+                .padding(.horizontal, Theme.Space.page)
+                .padding(.top, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.xxl)
+            }
         }
         .background(Theme.canvas)
     }
 
     private var metrics: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
-            Text(Format.dayTitle(day))
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.label)
-
             HStack(spacing: Theme.Space.m) {
                 MetricTile(label: "Focused", value: Format.compact(report.focusedTime))
                 MetricTile(label: "Tracked", value: Format.compact(report.trackedTime))

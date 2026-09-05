@@ -82,25 +82,26 @@ struct InsightsView: View {
     }
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            PaneHeader(title: "Insights", subtitle: "Last \(Self.window) days")
+            Divider()
+            ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxl) {
                 header
                 focusTrend
                 honestyChart
                 categoryChart
             }
-            .padding(.horizontal, Theme.Space.page)
-            .padding(.top, Theme.Space.page)
-            .padding(.bottom, Theme.Space.xxl)
+                .padding(.horizontal, Theme.Space.page)
+                .padding(.top, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.xxl)
+            }
         }
         .background(Theme.canvas)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
-            Text("Last \(Self.window) days")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Theme.label)
             HStack(spacing: Theme.Space.m) {
                 MetricTile(label: "Total focus", value: Format.compact(totalFocus))
                 MetricTile(label: "Daily average",

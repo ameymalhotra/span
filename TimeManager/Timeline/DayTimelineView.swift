@@ -572,9 +572,10 @@ private struct TimelineLegend: View {
     var body: some View {
         Group {
             if entries.isEmpty {
-                Text("Nothing tracked yet today")
+                Text("Nothing tracked yet today — colours here will name what you were in")
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.tertiaryLabel)
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -602,7 +603,8 @@ private struct TimelineLegend: View {
             }
         }
         .padding(.horizontal, Theme.Space.m)
-        .frame(height: 30)
+        .frame(height: 34)
+        .background(Theme.surface.opacity(0.5))
     }
 }
 
