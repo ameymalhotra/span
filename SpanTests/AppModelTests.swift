@@ -137,7 +137,7 @@ struct AppModelTests {
         #expect(model.activeSession == nil)
     }
 
-    @Test("finishing returns the session so the reflection sheet can be offered")
+    @Test("finishing returns the session and queues its review")
     func finishReturnsTheSession() throws {
         model.startSession(title: "Write", category: "Deep Work", minutes: 45)
         let finished = model.finishSession()
@@ -149,6 +149,7 @@ struct AppModelTests {
         #expect(finished?.openSegment == nil)
         #expect(model.activeSession == nil)
         #expect(finished?.needsReflection == true)
+        #expect(model.pendingReflection?.id == finished?.id)
     }
 
     @Test("finishing with nothing running returns nothing")

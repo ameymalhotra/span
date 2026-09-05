@@ -63,26 +63,52 @@ struct ConsistencyTests {
         #expect(byCategory == Clock.hours(2))
     }
 
-    @Test("finishing a session leaves a review owed, so a caller that drops it loses the prompt")
-    func finishingOwesAReview() throws {
-        // RootView keeps the returned session and presents the review sheet.
-        // MenuBarPanelView and HUDPillView call the same method and discard the
-        // result, so this is what they throw away.
+    @Test("finishing queues the review, however the session was finished")
+    func finishingQueuesTheReview() throws {
+        // Every surface calls finishSession. The menu bar and the HUD have
+        // nowhere to present a sheet, so the session is queued on the model and
+        // the main window picks it up — rather than the review being dropped.
         let model = AppModel(container: container)
         model.startSession(title: "Write", category: "Deep Work", minutes: 30)
 
         let finished = try #require(model.finishSession())
-        #expect(finished.needsReflection, "the finished session still owes a review")
-        #expect(finished.focusRating == nil)
-        #expect(finished.honestWorkMinutes == nil)
+        #expect(model.pendingReflection?.id == finished.id,
+                "the finished session was not queued for review")
+        #expect(finished.needsReflection)
 
-        // Left unanswered, the day counts it as finished but unreviewed — the
-        // honest-work number silently under-reports.
+        // Answering it clears the debt.
+        finished.focusRating = 4
+        finished.honestWorkMinutes = 20
+        finished.reflectionState = .completed
+        model.pendingReflection = nil
+
         let report = DayReport(day: Clock.dayStart, sessions: [finished], entries: [],
                                activity: [], now: Date.now)
         #expect(report.completedCount == 1)
-        #expect(report.reflectedCount == 0)
-        #expect(report.honestWorkTime == 0)
+        #expect(report.reflectedCount == 1)
+        #expect(report.honestWorkTime == Clock.minutes(20))
+        model.stop()
+    }
+
+    @Test("finishing nothing queues nothing")
+    func finishingNothingQueuesNothing() {
+        let model = AppModel(container: container)
+        #expect(model.finishSession() == nil)
+        #expect(model.pendingReflection == nil)
+        model.stop()
+    }
+
+    @Test("a skipped review still clears the queue")
+    func skippingClearsTheQueue() throws {
+        let model = AppModel(container: container)
+        model.startSession(title: "Write", category: "Deep Work", minutes: 30)
+        let finished = try #require(model.finishSession())
+
+        finished.reflectionState = .skipped
+        model.pendingReflection = nil
+
+        #expect(!finished.needsReflection)
+        #expect(!finished.isReflected)
         model.stop()
     }
 }

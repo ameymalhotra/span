@@ -26,6 +26,13 @@ final class AppModel {
     /// its editor.
     var pendingBlockEdit: TimeEntry?
 
+    /// A session that has just finished and is owed a review.
+    ///
+    /// The main window presents the sheet. The menu bar and the HUD can finish
+    /// a session but have nowhere to show one, so they hand it over here rather
+    /// than dropping the review on the floor.
+    var pendingReflection: WorkSession?
+
     // Pre-formatted so a tick that doesn't change the displayed text doesn't
     // invalidate any view. Publishing a `Date` would re-render every second
     // regardless of whether anything visibly moved.
@@ -131,8 +138,12 @@ final class AppModel {
         refreshStats()
     }
 
-    /// Finishes the session and hands it back so the caller can offer the
-    /// reflection sheet.
+    /// Finishes the session and queues its review.
+    ///
+    /// The review is queued rather than returned so that every surface offers
+    /// it: the menu bar and the HUD used to call this and discard the result,
+    /// which quietly skipped the review and left the session counted as
+    /// finished but unreviewed for good.
     @discardableResult
     func finishSession() -> WorkSession? {
         guard let session = activeSession else { return nil }
@@ -140,6 +151,7 @@ final class AppModel {
         session.complete()
         save()
         activeSession = nil
+        pendingReflection = session
         refreshStats()
         return session
     }

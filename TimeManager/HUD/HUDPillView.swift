@@ -110,14 +110,15 @@ struct HUDPillView: View {
                 Button("Pause Session") { model.pauseSession() }
                     .accessibilityIdentifier("hud.pause")
             }
-            Button("Finish Session") { model.finishSession() }
-                .accessibilityIdentifier("hud.finish")
+            Button("Finish Session") {
+                model.finishSession()
+                // The review sheet lives in the main window.
+                openMainWindow()
+            }
+            .accessibilityIdentifier("hud.finish")
             Divider()
         }
-        Button("Open Span") {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.first { $0 is HUDPanel == false }?.makeKeyAndOrderFront(nil)
-        }
+        Button("Open Span") { openMainWindow() }
         Divider()
         Toggle("Pause Tracking", isOn: Binding(
             get: { model.tracker.isPaused },
@@ -131,6 +132,13 @@ struct HUDPillView: View {
         Divider()
         Button("Quit Span") { NSApp.terminate(nil) }
             .accessibilityIdentifier("hud.quit")
+    }
+
+    /// Fronts the main window. The HUD floats above every app and presents
+    /// nothing itself, so anything needing a sheet has to go through there.
+    private func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first { !($0 is HUDPanel) }?.makeKeyAndOrderFront(nil)
     }
 }
 

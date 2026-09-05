@@ -48,7 +48,6 @@ struct RootView: View {
     private static let minimumWidth: CGFloat = 216 + 380 + 300 + 80
     private static let minimumHeight: CGFloat = 620
     @State private var isStartingSession = false
-    @State private var reflecting: WorkSession?
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
 
     var body: some View {
@@ -88,7 +87,9 @@ struct RootView: View {
                 model.startSession(title: title, category: category, minutes: minutes)
             }
         }
-        .sheet(item: $reflecting) { session in
+        // Bound to the model, so a session finished from the menu bar or the
+        // HUD raises the review here too.
+        .sheet(item: $model.pendingReflection) { session in
             ReflectionView(session: session)
         }
     }
@@ -118,7 +119,7 @@ struct RootView: View {
         case .focus, .timeline:
             FocusPaneView(
                 onStart: { isStartingSession = true },
-                onFinish: { reflecting = model.finishSession() }
+                onFinish: { model.finishSession() }
             )
         case .day:
             DayReviewView(day: model.selectedDate)

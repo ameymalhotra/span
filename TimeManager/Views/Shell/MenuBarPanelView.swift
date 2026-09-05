@@ -23,7 +23,12 @@ struct MenuBarPanelView: View {
                         Button("Pause") { model.pauseSession() }
                             .accessibilityIdentifier("menuBar.pause")
                     }
-                    Button("Finish") { model.finishSession() }
+                    Button("Finish") {
+                        model.finishSession()
+                        // The review sheet lives in the main window, which may
+                        // not even be open from here.
+                        openMainWindow()
+                    }
                         .accessibilityIdentifier("menuBar.finish")
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
@@ -46,8 +51,7 @@ struct MenuBarPanelView: View {
             Divider()
 
             Button("Open Span") {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first { !($0 is HUDPanel) }?.makeKeyAndOrderFront(nil)
+                openMainWindow()
             }
             Button("Quit") { NSApp.terminate(nil) }
                 .accessibilityIdentifier("menuBar.quit")
@@ -56,5 +60,12 @@ struct MenuBarPanelView: View {
         .padding(Theme.Space.l)
         .onAppear { model.beginFastUpdates() }
         .onDisappear { model.endFastUpdates() }
+    }
+
+    /// Fronts the main window, which is where sheets are presented and may be
+    /// closed while the menu bar item is still around.
+    private func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first { !($0 is HUDPanel) }?.makeKeyAndOrderFront(nil)
     }
 }
