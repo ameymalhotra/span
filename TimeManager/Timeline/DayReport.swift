@@ -104,9 +104,35 @@ struct DayReport {
             .sorted { $0.duration > $1.duration }
     }
 
-    /// When the user last stopped working, used for the HUD's "time since last
-    /// break". Returns the end of the most recent idle span.
-    static func lastBreakEnd(in activity: [ActivityRecord]) -> Date? {
-        activity.filter(\.isIdle).map(\.endedAt).max()
+    /// When the user last resumed after a break, for "time since last break".
+    ///
+    /// Recorded idle spans are not the whole story: while the app is closed or
+    /// tracking is paused nothing is written at all, so a night's sleep leaves
+    /// no idle record and the counter claims you have been at it for thirteen
+    /// hours. A gap in the recording is therefore treated as a break too — if
+    /// nothing was tracked for longer than the idle threshold, you were not
+    /// working through it.
+    static func lastBreakEnd(in activity: [ActivityRecord], threshold: TimeInterval) -> Date? {
+        let sorted = activity.sorted { $0.startedAt < $1.startedAt }
+        var lastBreakEnd: Date?
+        var previousEnd: Date?
+
+        for record in sorted {
+            if let previous = previousEnd,
+               record.startedAt.timeIntervalSince(previous) >= threshold {
+                lastBreakEnd = record.startedAt
+            }
+            if record.isIdle {
+                lastBreakEnd = record.endedAt
+            }
+            previousEnd = max(previousEnd ?? record.endedAt, record.endedAt)
+        }
+
+        // A trailing gap counts too: tracking may have stopped an hour ago.
+        if let previous = previousEnd,
+           Date.now.timeIntervalSince(previous) >= threshold {
+            return nil
+        }
+        return lastBreakEnd
     }
 }

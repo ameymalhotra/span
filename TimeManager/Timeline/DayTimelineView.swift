@@ -22,6 +22,7 @@ struct DayTimelineView: View {
     @State private var editingEntry: TimeEntry?
     @State private var draft: DraftRange?
     @State private var dragOrigin: (start: Date, end: Date)?
+    @State private var hoveredRail: TimelineBlock?
 
     private static let gutterWidth: CGFloat = 52
     /// Wide enough to read as a continuous band of the day rather than a line
@@ -76,23 +77,21 @@ struct DayTimelineView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                HStack(alignment: .top, spacing: 0) {
-                    HourGutter(geometry: geometry, width: Self.gutterWidth)
-                    track
+        VStack(spacing: 0) {
+            TimelineLegend(entries: legendEntries)
+            Divider()
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    HStack(alignment: .top, spacing: 0) {
+                        HourGutter(geometry: geometry, width: Self.gutterWidth)
+                        track
+                    }
+                    .frame(height: geometry.totalHeight, alignment: .top)
                 }
-                .frame(height: geometry.totalHeight, alignment: .top)
+                .task(id: day) { await scrollToRelevantHour(using: proxy) }
             }
-            .task(id: day) { await scrollToRelevantHour(using: proxy) }
         }
         .background(Theme.canvas)
-        .popover(item: $selection) { block in
-            TimelineBlockDetail(block: block)
-        }
-        .popover(item: $editingEntry) { entry in
-            TimeEntryEditor(entry: entry)
-        }
         .onChange(of: model.pendingBlockEdit) { _, entry in
             guard let entry else { return }
             editingEntry = entry
@@ -125,16 +124,24 @@ struct DayTimelineView: View {
                 ActivityRail(blocks: ribbonBlocks, geometry: geometry)
                     .frame(width: Self.railWidth, height: geometry.totalHeight)
 
-                // Hit targets only — the rail itself is painted as one band, so
-                // these are invisible and may overlap without showing it.
-                ForEach(ribbonBlocks) { block in
-                    let extent = geometry.extent(for: block, minimumHeight: 5)
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .frame(width: Self.railWidth, height: extent.height)
-                        .offset(y: extent.y)
-                        .help(railTooltip(block))
-                        .onTapGesture { selection = block }
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(width: Self.railWidth, height: geometry.totalHeight)
+                    .onContinuousHover { phase in
+                        guard case .active(let point) = phase else {
+                            hoveredRail = nil
+                            return
+                        }
+                        let moment = geometry.date(for: point.y)
+                        hoveredRail = ribbonBlocks.first { $0.start <= moment && moment <= $0.end }
+                    }
+
+                if let hoveredRail {
+                    railReadout(hoveredRail)
+                        .offset(x: Self.railWidth + 6,
+                                y: max(0, geometry.y(for: hoveredRail.start) - 4))
+                        .allowsHitTesting(false)
+                        .zIndex(2)
                 }
 
                 ForEach(TimelineLayout.place(cardBlocks, in: geometry, minimumHeight: 26)) { placed in
@@ -234,13 +241,71 @@ struct DayTimelineView: View {
                 if let entry { editingEntry = entry } else { selection = placed.block }
             }
             .gesture(moveGesture(for: entry))
+            // Anchored to the block rather than to the timeline, so the detail
+            // appears beside what was clicked and moves with it when scrolling.
+            .popover(isPresented: detailBinding(for: placed.block), arrowEdge: .trailing) {
+                TimelineBlockDetail(block: placed.block)
+            }
+            .popover(isPresented: editorBinding(for: entry), arrowEdge: .trailing) {
+                if let entry { TimeEntryEditor(entry: entry) }
+            }
     }
 
-    private func railTooltip(_ block: TimelineBlock) -> String {
-        var text = "\(block.title) · \(Format.compact(block.duration))\n"
-            + "\(Format.timeOfDay(block.start)) – \(Format.timeOfDay(block.end))"
-        if let subtitle = block.subtitle { text += "\n\(subtitle)" }
-        return text
+    private func detailBinding(for block: TimelineBlock) -> Binding<Bool> {
+        Binding(
+            get: { selection?.id == block.id },
+            set: { if !$0 { selection = nil } }
+        )
+    }
+
+    private func editorBinding(for entry: TimeEntry?) -> Binding<Bool> {
+        Binding(
+            get: { entry != nil && editingEntry?.id == entry?.id },
+            set: { if !$0 { editingEntry = nil } }
+        )
+    }
+
+    /// A floating label for whatever the pointer is over in the rail.
+    private func railReadout(_ block: TimelineBlock) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(block.title)
+                .font(Theme.Font.blockTitle)
+                .foregroundStyle(Theme.label)
+            Text("\(Format.timeOfDay(block.start)) – \(Format.timeOfDay(block.end)) · \(Format.compact(block.duration))")
+                .font(Theme.Font.micro)
+                .monospacedDigit()
+                .foregroundStyle(Theme.secondaryLabel)
+            if let subtitle = block.subtitle {
+                Text(subtitle)
+                    .font(Theme.Font.micro)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.xs)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.block))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.block)
+                .strokeBorder(Theme.hairline, lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+        .frame(maxWidth: 240, alignment: .leading)
+        .fixedSize()
+    }
+
+    /// What the rail's colours mean, so the stripes do not have to be
+    /// interrogated one by one.
+    private var legendEntries: [CategoryTotal] {
+        var totals: [String: TimeInterval] = [:]
+        for block in ribbonBlocks where block.kind == .activity {
+            totals[block.category ?? block.title, default: 0] += block.duration
+        }
+        let grand = totals.values.reduce(0, +)
+        return totals
+            .map { CategoryTotal(name: $0.key, duration: $0.value,
+                                 fraction: grand > 0 ? $0.value / grand : 0) }
+            .sorted { $0.duration > $1.duration }
     }
 
     private enum Edge { case top, bottom }
@@ -385,6 +450,48 @@ private struct TimelineGrid: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// Names the colours in the activity rail, with how long each took.
+private struct TimelineLegend: View {
+    let entries: [CategoryTotal]
+    private static let shown = 5
+
+    var body: some View {
+        Group {
+            if entries.isEmpty {
+                Text("Nothing tracked yet today")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Theme.Space.m) {
+                        ForEach(entries.prefix(Self.shown)) { entry in
+                            HStack(spacing: Theme.Space.xs) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(entry.color)
+                                    .frame(width: 8, height: 8)
+                                Text(entry.name)
+                                    .font(Theme.Font.caption)
+                                    .foregroundStyle(Theme.secondaryLabel)
+                                Text(Format.compact(entry.duration))
+                                    .font(Theme.Font.caption.monospacedDigit())
+                                    .foregroundStyle(Theme.tertiaryLabel)
+                            }
+                        }
+                        if entries.count > Self.shown {
+                            Text("+\(entries.count - Self.shown) more")
+                                .font(Theme.Font.caption)
+                                .foregroundStyle(Theme.tertiaryLabel)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .frame(height: 30)
     }
 }
 

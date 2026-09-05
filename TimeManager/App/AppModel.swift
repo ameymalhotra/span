@@ -190,8 +190,8 @@ final class AppModel {
         if tracker.isPaused {
             sinceBreakText = "—"
         } else {
-            let reference = DayReport.lastBreakEnd(in: activity)
-                ?? activity.map(\.startedAt).min()
+            let reference = DayReport.lastBreakEnd(in: activity, threshold: IdleMonitor.threshold)
+                ?? activity.filter { !$0.isIdle }.map(\.startedAt).max()
             // Compact, not clock: this is a span of hours, and "12:42:10"
             // both reads as a countdown and overflows the pill.
             sinceBreakText = reference.map { Format.compact(now.timeIntervalSince($0)) } ?? "—"
