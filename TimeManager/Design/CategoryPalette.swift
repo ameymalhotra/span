@@ -37,12 +37,34 @@ enum CategoryPalette {
     /// a category should not look like just another category.
     private static let neutral = (light: UInt32(0x5A6270), dark: UInt32(0x9BA4B4))
 
+    /// Fixed slots for the categories the app itself produces.
+    ///
+    /// Hashing alone is not enough: seven slots and eight built-in categories
+    /// means collisions are guaranteed by pigeonhole, and in practice they
+    /// clustered badly — four of the built-ins landed on gold. Pinning the
+    /// common ones guarantees the categories a real day is mostly made of are
+    /// all distinguishable, and leaves hashing to cover the long tail.
+    private static let fixed: [String: Int] = [
+        "deep work": 4,   // green
+        "building": 3,    // blue
+        "talking": 0,     // orange
+        "meetings": 2,    // pink
+        "browsing": 1,    // teal
+        "reading": 5,     // purple
+        "designing": 6,   // gold
+    ]
+
     static func color(for name: String?) -> Color {
         guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
             return Color.adaptive(light: neutral.light, dark: neutral.dark)
         }
-        let hue = hues[index(for: name)]
+        let hue = hues[slot(for: name)]
         return Color.adaptive(light: hue.light, dark: hue.dark)
+    }
+
+    private static func slot(for name: String) -> Int {
+        let key = name.trimmingCharacters(in: .whitespaces).lowercased()
+        return fixed[key] ?? index(for: name)
     }
 
     /// Stable index derived from the name. Uses an explicit FNV-1a hash rather

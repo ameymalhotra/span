@@ -97,7 +97,7 @@ private struct HUDStat: View {
                 Text(top)
                 Text(bottom)
             }
-            .font(.system(size: 8.5, weight: .semibold))
+            .font(.system(size: 9, weight: .semibold))
             .tracking(0.7)
             .foregroundStyle(.white.opacity(0.45))
         }

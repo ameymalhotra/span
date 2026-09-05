@@ -15,6 +15,13 @@ enum Theme {
     static let accent = Color.adaptive(light: 0x0E8C7C, dark: 0x2FD3BC)
     static let accentMuted = Color.adaptive(light: 0x0E8C7C, dark: 0x2FD3BC).opacity(0.14)
 
+    /// Label colour for anything filled with `accent`.
+    ///
+    /// The dark accent is a light teal — correct as a fill or stroke against a
+    /// dark surface, but white text on it lands around 1.9:1. Prominent buttons
+    /// take a dark label in dark mode instead.
+    static let onAccent = Color.adaptive(light: 0xFFFFFF, dark: 0x0B2E29)
+
     /// The now-indicator. Deliberately the one hot colour in the timeline.
     static let now = Color.adaptive(light: 0xE0322A, dark: 0xFF544A)
 

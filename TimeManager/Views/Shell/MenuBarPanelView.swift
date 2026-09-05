@@ -23,6 +23,8 @@ struct MenuBarPanelView: View {
                     }
                     Button("Finish") { model.finishSession() }
                         .buttonStyle(.borderedProminent)
+                        .tint(Theme.accent)
+                        .foregroundStyle(Theme.onAccent)
                 }
             } else {
                 Text("No session running")

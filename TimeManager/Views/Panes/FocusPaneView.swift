@@ -119,6 +119,8 @@ struct FocusPaneView: View {
                 }
                 Button("Finish", action: onFinish)
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .foregroundStyle(Theme.onAccent)
             }
             .controlSize(.large)
 
