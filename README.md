@@ -17,6 +17,7 @@ genuinely work.
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-native-2C6FD6?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-284%20passing-1F8A4C?style=flat-square)
 ![Local only](https://img.shields.io/badge/data-stays%20on%20your%20Mac-8A46CE?style=flat-square)
+![MIT](https://img.shields.io/badge/licence-MIT-C25E12?style=flat-square)
 
 </div>
 
@@ -287,6 +288,5 @@ TimeManager/
 ---
 
 <div align="center">
-<sub>No licence is declared, so all rights are reserved by default.<br>
-Add a <code>LICENSE</code> file to let others use or modify this.</sub>
+<sub>Released under the <a href="LICENSE">MIT License</a> · © 2026 Amey Malhotra</sub>
 </div>
