@@ -79,6 +79,7 @@ struct GuideView: View {
             bullet("Open a block to set exact start and end times, so you are never stuck with wherever the drag landed.")
             bullet("Finished sessions resize the same way. If you kept working past the end of one, pull its bottom edge down rather than logging a second block.")
             bullet("⌘B adds a block at the current time without dragging.")
+            note("A block is a plan, not a running clock. Draw one across the present and the Focus pane shows it counting down, with a button to start tracking it — which counts the time already inside the block and runs to its end.")
             GuideDiagram.dragToCreate
         }
     }

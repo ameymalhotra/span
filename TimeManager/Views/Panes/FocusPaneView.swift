@@ -18,6 +18,7 @@ struct FocusPaneView: View {
 
     @Query private var todaySessions: [WorkSession]
     @Query private var recentSessions: [WorkSession]
+    @Query private var todayEntries: [TimeEntry]
 
     let onStart: () -> Void
     let onFinish: () -> Void
@@ -35,6 +36,9 @@ struct FocusPaneView: View {
         let recentStart = calendar.date(byAdding: .day, value: -14, to: dayStart) ?? dayStart
         _recentSessions = Query(filter: #Predicate<WorkSession> { $0.startedAt >= recentStart },
                                 sort: \.startedAt, order: .reverse)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+        _todayEntries = Query(filter: #Predicate<TimeEntry> { $0.startedAt >= dayStart && $0.startedAt < dayEnd },
+                              sort: \.startedAt)
     }
 
     private var focusToday: TimeInterval {
@@ -87,13 +91,26 @@ struct FocusPaneView: View {
             .joined(separator: "\n")
     }
 
+    /// A hand-made block covering the present moment. Drawing one across now is
+    /// a statement about what you are doing, so the pane should say so rather
+    /// than greeting you as though nothing were happening.
+    private func blockHappeningNow(at now: Date) -> TimeEntry? {
+        todayEntries.first { $0.startedAt <= now && now < $0.endedAt }
+    }
+
     var body: some View {
         ZStack {
             Theme.canvas
             if let session = model.activeSession {
                 running(session)
             } else {
-                idle
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    if let block = blockHappeningNow(at: context.date) {
+                        happeningNow(block, at: context.date)
+                    } else {
+                        idle
+                    }
+                }
             }
         }
         // The one-second clock only runs while this pane is on screen.
@@ -248,6 +265,68 @@ struct FocusPaneView: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+    }
+
+    // MARK: - A block covering now
+
+    /// The same treatment a running session gets, because from the user's side
+    /// this is a running thing — it simply has no timer attached yet.
+    private func happeningNow(_ block: TimeEntry, at now: Date) -> some View {
+        let elapsed = now.timeIntervalSince(block.startedAt)
+        let remaining = max(0, block.endedAt.timeIntervalSince(now))
+        let progress = block.duration > 0 ? min(1, elapsed / block.duration) : 0
+        let colour = CategoryPalette.color(for: block.category)
+
+        return VStack(spacing: Theme.Space.xl) {
+            VStack(spacing: Theme.Space.xs) {
+                Text("HAPPENING NOW")
+                    .font(Theme.Font.sectionHeader)
+                    .tracking(0.8)
+                    .foregroundStyle(colour)
+                Text(block.title.isEmpty ? "Untitled block" : block.title)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(block.title.isEmpty ? Theme.tertiaryLabel : Theme.label)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+
+            ProgressRing(progress: progress, colour: colour, diameter: 248, width: 7) {
+                VStack(spacing: Theme.Space.xs) {
+                    Text(Format.clock(remaining))
+                        .font(Theme.Font.timer)
+                        .foregroundStyle(Theme.label)
+                    Text("left of \(Format.compact(block.duration))")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryLabel)
+                }
+            }
+
+            VStack(spacing: Theme.Space.s) {
+                Button {
+                    model.startSession(from: block)
+                } label: {
+                    Label("Start tracking this", systemImage: "play.fill")
+                        .frame(minWidth: 180)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.onAccent)
+                .controlSize(.large)
+
+                Text("A block is a plan until you start it. Starting counts the time since \(Format.timeOfDay(block.startedAt)).")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("\(Format.compact(focusToday)) focused today · \(Format.percent(targetFraction)) of target")
+                .font(Theme.Font.caption)
+                .monospacedDigit()
+                .foregroundStyle(Theme.tertiaryLabel)
+        }
+        .padding(Theme.Space.xxl)
     }
 
     // MARK: - Running

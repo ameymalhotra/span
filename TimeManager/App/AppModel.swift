@@ -153,6 +153,34 @@ final class AppModel {
         return session
     }
 
+    /// Turns a hand-made block into the session that is running now.
+    ///
+    /// The session starts where the block started, so time already inside it
+    /// counts as worked, and is planned to run to the block's end — which is
+    /// what the countdown then shows. The block itself is removed rather than
+    /// left alongside: two records for one stretch of work would be counted
+    /// twice in every total.
+    func startSession(from entry: TimeEntry) {
+        guard activeSession == nil else { return }
+        let title = entry.title.trimmingCharacters(in: .whitespaces)
+        let session = WorkSession(
+            title: title.isEmpty ? "Untitled session" : title,
+            category: entry.category,
+            plannedMinutes: max(1, Int(entry.duration / 60))
+        )
+        session.startedAt = entry.startedAt
+        let segment = SessionSegment(startedAt: entry.startedAt, session: session)
+        session.segments.append(segment)
+
+        context.insert(session)
+        context.delete(entry)
+        save()
+
+        activeSession = session
+        NotificationService.scheduleEndReminder(for: session)
+        refreshStats()
+    }
+
     func pauseSession() {
         guard let activeSession else { return }
         activeSession.pause()

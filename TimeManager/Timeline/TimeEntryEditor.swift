@@ -4,9 +4,16 @@ import SwiftUI
 /// Editor for a hand-made time block: what it was, and exactly when.
 struct TimeEntryEditor: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
 
     @Bindable var entry: TimeEntry
     let onClose: () -> Void
+
+    /// True while the block covers the present moment.
+    private var isHappeningNow: Bool {
+        let now = Date.now
+        return entry.startedAt <= now && now < entry.endedAt
+    }
     @FocusState private var titleFocused: Bool
 
     var body: some View {
@@ -36,6 +43,24 @@ struct TimeEntryEditor: View {
                     .monospacedDigit()
             }
             .font(Theme.Font.body)
+
+            if isHappeningNow, model.activeSession == nil {
+                Divider()
+                Button {
+                    model.startSession(from: entry)
+                    onClose()
+                } label: {
+                    Label("Start this as a session", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.onAccent)
+                Text("Counts the time since \(Format.timeOfDay(entry.startedAt)) and runs to \(Format.timeOfDay(entry.endedAt)).")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Divider()
 
