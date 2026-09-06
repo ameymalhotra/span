@@ -53,6 +53,13 @@ enum CategoryPalette {
         )
     }
 
+    /// Whether a name resolves to a colour someone chose, rather than to the
+    /// hash fallback. Exists so the load order can be tested: an empty registry
+    /// silently produces plausible but wrong colours.
+    static func isRegistered(_ name: String) -> Bool {
+        registry[name.trimmingCharacters(in: .whitespaces).lowercased()] != nil
+    }
+
     static func color(slot: Int) -> Color {
         let swatch = swatches[((slot % swatches.count) + swatches.count) % swatches.count]
         return swatch.color

@@ -5,6 +5,7 @@ import SwiftUI
 /// session or naming a block.
 struct CategoryManager: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
     @Query(sort: \TimeCategory.sortIndex) private var categories: [TimeCategory]
 
     @State private var editingColorFor: TimeCategory?
@@ -98,5 +99,6 @@ struct CategoryManager: View {
     private func refresh() {
         try? context.save()
         CategoryPalette.updateRegistry(categories)
+        model.paletteDidChange()
     }
 }

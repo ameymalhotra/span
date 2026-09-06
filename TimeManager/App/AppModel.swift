@@ -31,6 +31,18 @@ final class AppModel {
     /// Set after a reset so the window can offer the first-run questions again.
     var needsOnboarding = false
 
+    /// Bumped whenever category colours or app rules change.
+    ///
+    /// The palette itself is a static lookup, which SwiftUI cannot observe, so
+    /// recolouring a category would not repaint the timeline drawn from it.
+    /// Views that paint category colours read this to pick the change up.
+    private(set) var paletteGeneration = 0
+
+    func paletteDidChange() {
+        ModelStack.loadAppRules(in: context)
+        paletteGeneration += 1
+    }
+
     /// A session that has just finished and is owed a review.
     ///
     /// The main window presents the sheet. The menu bar and the HUD can finish
@@ -69,13 +81,20 @@ final class AppModel {
         // before any view noticed a session had started.
         self.context = container.mainContext
         self.tracker = ActivityTracker(context: context)
+
+        // Colours have to be known before the first view draws, not after.
+        // Loading these in start() — which runs from a .task once the window is
+        // on screen — meant the first render found an empty registry and fell
+        // back to a hash of each category's name, so blocks came up in colours
+        // nobody had chosen. Nothing then repainted them, because a static
+        // registry is invisible to SwiftUI.
+        ModelStack.seedCategoriesIfNeeded(in: context)
+        ModelStack.loadAppRules(in: context)
     }
 
     // MARK: - Lifecycle
 
     func start() {
-        ModelStack.seedCategoriesIfNeeded(in: context)
-        ModelStack.loadAppRules(in: context)
         ModelStack.recoverStaleSessions(in: context)
         refreshActiveSession()
         tracker.start()

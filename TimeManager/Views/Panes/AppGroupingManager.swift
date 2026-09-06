@@ -9,6 +9,7 @@ import SwiftUI
 /// Settings.
 struct AppGroupingManager: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
 
     @AppStorage("timelineGrouping") private var groupingRaw = TimelineGrouping.category.rawValue
 
@@ -185,6 +186,7 @@ struct AppGroupingManager: View {
             set: { newValue in
                 AppCategoryRule.assign(newValue, bundleIdentifier: app.bundleIdentifier,
                                        appName: app.name, in: context)
+                model.paletteDidChange()
             }
         )
     }

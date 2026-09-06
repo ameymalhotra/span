@@ -123,6 +123,7 @@ private struct CategoryList: View {
 /// wheel when none of them fit.
 struct CategoryCreator: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
     let existing: [TimeCategory]
     var onCancel: () -> Void
     var onCreate: (String) -> Void
@@ -163,6 +164,7 @@ struct CategoryCreator: View {
         context.insert(category)
         try? context.save()
         CategoryPalette.updateRegistry(existing + [category])
+        model.paletteDidChange()
         onCreate(trimmed)
     }
 

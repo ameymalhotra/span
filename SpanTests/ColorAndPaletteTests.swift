@@ -197,3 +197,45 @@ struct CategoryPaletteTests {
         #expect(defaults.allSatisfy { (0..<CategoryPalette.swatches.count).contains($0.1) })
     }
 }
+
+@Suite("Palette load order")
+@MainActor
+struct PaletteLoadOrderTests {
+
+    /// The bug this guards: the registry used to be filled from `start()`,
+    /// which runs after the first view draws. Until then every category
+    /// resolved through the hash fallback, so blocks appeared in colours nobody
+    /// had chosen — and nothing repainted them afterwards, because a static
+    /// lookup is invisible to SwiftUI.
+    @Test("constructing the model registers the seeded categories")
+    func registryIsLoadedBeforeAnythingDraws() throws {
+        CategoryPalette.updateRegistry([])
+        #expect(!CategoryPalette.isRegistered("Deep Work"),
+                "precondition: the registry starts empty")
+
+        let container = try TestStore.inMemory()
+        _ = AppModel(container: container)
+
+        for name in TimeCategory.defaults.map(\.0) {
+            #expect(CategoryPalette.isRegistered(name),
+                    "\(name) must resolve to its chosen colour, not a hash of its name")
+        }
+    }
+
+    @Test("registration is what decides whether a chosen colour is used")
+    func registrationDrivesResolution() throws {
+        CategoryPalette.updateRegistry([])
+        #expect(!CategoryPalette.isRegistered("School Work"))
+
+        let category = TimeCategory(name: "School Work", colorSlot: 3, sortIndex: 0)
+        CategoryPalette.updateRegistry([category])
+        #expect(CategoryPalette.isRegistered("School Work"))
+        // Matched without regard to case or surrounding space, since the name
+        // is typed freehand wherever it is used.
+        #expect(CategoryPalette.isRegistered("  school work "))
+
+        CategoryPalette.updateRegistry([])
+        #expect(!CategoryPalette.isRegistered("School Work"),
+                "clearing the registry must fall back, not keep a stale colour")
+    }
+}

@@ -62,6 +62,9 @@ struct DayTimelineView: View {
     }
 
     private var blocks: [TimelineBlock] {
+        // Establishes a dependency on the palette, which is otherwise a static
+        // lookup SwiftUI cannot see changing.
+        _ = model.paletteGeneration
         let now = Date.now
         return sessions.flatMap { TimelineBlock.blocks(for: $0, now: now) }
             + entries.map(TimelineBlock.block(for:))
@@ -719,6 +722,7 @@ private struct TimelineLegend: View {
 /// somewhere else in Settings.
 private struct LegendDetail: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
     let entries: [LegendEntry]
     let mode: TimelineGrouping
 
@@ -846,6 +850,7 @@ private struct LegendDetail: View {
                 set: {
                     AppCategoryRule.assign($0, bundleIdentifier: app.bundleIdentifier,
                                            appName: app.name, in: context)
+                    model.paletteDidChange()
                 }
             ))
             .frame(width: 168)
