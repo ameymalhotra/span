@@ -25,6 +25,9 @@ struct DayTimelineView: View {
     @State private var dragOrigin: (start: Date, end: Date)?
     @State private var hoveredRail: TimelineBlock?
     @State private var inspectorY: CGFloat = 0
+    /// The panel's measured height, so it can be kept inside the track. A
+    /// guessed constant is what used to push half of it off the bottom.
+    @State private var inspectorHeight: CGFloat = 260
     @State private var hoveredCard: String?
     @AppStorage("timelineGrouping") private var groupingRaw = TimelineGrouping.category.rawValue
 
@@ -312,7 +315,9 @@ struct DayTimelineView: View {
             // Sits beside the lane where there is room, and tucks inside the
             // track when the pane is narrow.
             let x = min(max(laneX + Theme.Space.s, 0), max(0, trackWidth - panelWidth - 4))
-            let y = min(max(0, inspectorY - 8), max(0, geometry.totalHeight - 260))
+            // Clamped against the panel's own measured height rather than the
+            // 260 points once assumed here.
+            let y = geometry.panelTop(anchoredAt: inspectorY, height: inspectorHeight)
 
             Group {
                 if let entry = editingEntry {
@@ -324,6 +329,15 @@ struct DayTimelineView: View {
                 }
             }
             .frame(width: panelWidth, alignment: .topLeading)
+            .background {
+                GeometryReader { panel in
+                    Color.clear
+                        .onChange(of: panel.size.height, initial: true) { _, height in
+                            guard height > 0 else { return }
+                            inspectorHeight = height
+                        }
+                }
+            }
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.panel))
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.panel)
@@ -408,11 +422,16 @@ struct DayTimelineView: View {
     /// fields, so both ends are written through to the first and last segment
     /// as well — otherwise the block would snap back on the next redraw, since
     /// that is what it is drawn from.
+    ///
+    /// Main-actor closures throughout: they read and write SwiftData models,
+    /// and rescheduling a running session's end reminder from here reaches the
+    /// notification service, which lives on the main actor too.
+    @MainActor
     private struct Resizable {
-        let start: () -> Date
-        let end: () -> Date
-        let setStart: (Date) -> Void
-        let setEnd: (Date) -> Void
+        let start: @MainActor () -> Date
+        let end: @MainActor () -> Date
+        let setStart: @MainActor (Date) -> Void
+        let setEnd: @MainActor (Date) -> Void
 
         init(entry: TimeEntry) {
             start = { entry.startedAt }

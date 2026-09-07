@@ -204,3 +204,38 @@ struct TimelineGeometryTests {
         #expect(height == hourHeight)
     }
 }
+
+// MARK: - The inspector panel
+
+@Suite("Panel placement")
+struct PanelPlacementTests {
+
+    private let geometry = TimelineGeometry(dayStart: Clock.dayStart, hourHeight: 60)
+
+    @Test("a panel beside an evening block is pulled up to fit")
+    func lateBlocksKeepTheWholePanel() {
+        // 11 PM, and a panel taller than the hour left below it. The scroll
+        // content ends at `totalHeight`, so anything past that is cut off
+        // rather than reachable — which is how half the session details went
+        // missing for anything late in the day.
+        let anchor = geometry.y(for: Clock.at(hour: 23))
+        let height: CGFloat = 420
+
+        let top = geometry.panelTop(anchoredAt: anchor, height: height)
+
+        #expect(top + height <= geometry.totalHeight)
+        #expect(top >= 0)
+    }
+
+    @Test("a panel with room below it stays beside its block")
+    func earlyBlocksAreNotMoved() {
+        let anchor = geometry.y(for: Clock.at(hour: 9))
+        #expect(geometry.panelTop(anchoredAt: anchor, height: 300) == anchor - 8)
+    }
+
+    @Test("a panel taller than the day is pinned to the top rather than pushed off it")
+    func anOversizedPanelStartsAtTheTop() {
+        let anchor = geometry.y(for: Clock.at(hour: 23))
+        #expect(geometry.panelTop(anchoredAt: anchor, height: geometry.totalHeight + 200) == 0)
+    }
+}

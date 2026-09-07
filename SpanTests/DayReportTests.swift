@@ -320,3 +320,78 @@ struct DayReportTests {
         #expect(DayReport.lastBreakEnd(in: [long, nested], threshold: 300) == nil)
     }
 }
+
+// MARK: - The honesty split
+
+@MainActor
+@Suite("Honesty split")
+struct HonestySplitTests {
+
+    @Test("only reviewed sessions are counted")
+    func unreviewedSessionsAreLeftOut() throws {
+        let container = try TestStore.inMemory()
+        let context = container.mainContext
+
+        // Reviewed: an hour worked, half of it called real.
+        Fixture.session(
+            in: context, startedAt: Clock.at(hour: 9), endedAt: Clock.at(hour: 10),
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 10))],
+            focusRating: 3, honestWorkMinutes: 30, reflectionState: .completed
+        )
+        // Never reviewed. Counting its hour as time that didn't feel real would
+        // be an answer the user never gave.
+        Fixture.session(
+            in: context, startedAt: Clock.at(hour: 11), endedAt: Clock.at(hour: 12),
+            segments: [(Clock.at(hour: 11), Clock.at(hour: 12))]
+        )
+
+        let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+        let split = DayReport.honestySplit(of: sessions)
+
+        #expect(split.clocked == Clock.hours(1))
+        #expect(split.honest == Clock.minutes(30))
+    }
+
+    @Test("the honest share never exceeds the clock it came out of")
+    func honestIsCappedAtClocked() throws {
+        let container = try TestStore.inMemory()
+        let context = container.mainContext
+
+        // Twenty minutes worked, but the review says ninety — the session was
+        // shortened after it was reviewed. Drawn as a whole and its part, an
+        // uncapped answer puts the part above the whole, which is exactly how
+        // "felt like work" came out taller than the hours recorded.
+        Fixture.session(
+            in: context, startedAt: Clock.at(hour: 9),
+            endedAt: Clock.at(hour: 9).addingTimeInterval(Clock.minutes(20)),
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 9).addingTimeInterval(Clock.minutes(20)))],
+            focusRating: 5, honestWorkMinutes: 90, reflectionState: .completed
+        )
+
+        let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+        let split = DayReport.honestySplit(of: sessions)
+
+        #expect(split.clocked == Clock.minutes(20))
+        #expect(split.honest == split.clocked)
+        // The remainder drawn on top of the solid part is what makes the bar
+        // add up to the time clocked.
+        #expect(split.clocked - split.honest == 0)
+    }
+
+    @Test("a skipped review contributes nothing")
+    func skippedReviewsAreNotAnAnswer() throws {
+        let container = try TestStore.inMemory()
+        let context = container.mainContext
+        Fixture.session(
+            in: context, startedAt: Clock.at(hour: 9), endedAt: Clock.at(hour: 10),
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 10))],
+            reflectionState: .skipped
+        )
+
+        let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+        let split = DayReport.honestySplit(of: sessions)
+
+        #expect(split.clocked == 0)
+        #expect(split.honest == 0)
+    }
+}

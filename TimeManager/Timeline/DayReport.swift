@@ -104,6 +104,23 @@ struct DayReport {
             .sorted { $0.duration > $1.duration }
     }
 
+    /// How much reviewed time was clocked, and how much of it the user called
+    /// real work.
+    ///
+    /// Only reviewed sessions are counted. An unreviewed session has no answer,
+    /// and treating its time as "didn't feel real" would be inventing one.
+    ///
+    /// `honest` is capped at `clocked` so the pair can be drawn as a whole and
+    /// its part. Read as two independent series they had nothing holding them
+    /// in order, and the part could be plotted taller than the whole it came
+    /// out of.
+    static func honestySplit(of sessions: [WorkSession]) -> (clocked: TimeInterval, honest: TimeInterval) {
+        let reviewed = sessions.filter(\.isReflected)
+        let clocked = reviewed.reduce(0) { $0 + $1.elapsed() }
+        let honest = reviewed.reduce(0) { $0 + TimeInterval(($1.honestWorkMinutes ?? 0) * 60) }
+        return (clocked, min(honest, clocked))
+    }
+
     /// When the user last resumed after a break, for "time since last break".
     ///
     /// Recorded idle spans are not the whole story: while the app is closed or

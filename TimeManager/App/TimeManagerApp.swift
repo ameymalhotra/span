@@ -1,6 +1,7 @@
 import AppKit
 import SwiftData
 import SwiftUI
+import UserNotifications
 
 @main
 struct TimeManagerApp: App {
@@ -65,11 +66,31 @@ struct TimeManagerApp: App {
 /// below hops back onto the main actor and would otherwise be sending a
 /// non-Sendable `self` across isolation domains.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
 
     private var model: AppModel?
     private var hud: HUDController?
     private var hudObserver: NSObjectProtocol?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Without a delegate, macOS suppresses a notification whose app is
+        // frontmost — so the one moment you are most likely to be looking at
+        // Span, sitting on the countdown, was the one moment the end of the
+        // session said nothing.
+        //
+        // Skipped under test for the same reason nothing else here touches the
+        // notification centre: a test run should not register with it.
+        guard !NotificationService.isTesting else { return }
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
 
     func configure(with model: AppModel) {
         guard self.model == nil else { return }

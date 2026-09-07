@@ -29,13 +29,15 @@ struct HUDPillView: View {
             HUDStat(
                 value: primaryValue,
                 caption: primaryCaption,
-                tint: Theme.HUD.accent,
+                tint: model.sessionIsOvertime ? Theme.HUD.overtime : Theme.HUD.accent,
                 pulses: model.activeSession?.status == .active,
                 minValueWidth: 48
             )
-            .help(model.activeSession == nil
-                  ? "Focused time so far today"
-                  : "Time remaining in this session")
+            .help(model.sessionIsOvertime
+                  ? "This session has run past its planned end"
+                  : model.activeSession == nil
+                    ? "Focused time so far today"
+                    : "Time remaining in this session")
 
             divider
 
@@ -97,7 +99,8 @@ struct HUDPillView: View {
         model.activeSession == nil ? model.focusTodayText : model.sessionClock
     }
     private var primaryCaption: String {
-        model.activeSession == nil ? "FOCUS TODAY" : "REMAINING"
+        if model.sessionIsOvertime { return "TIME UP" }
+        return model.activeSession == nil ? "FOCUS TODAY" : "REMAINING"
     }
 
     @ViewBuilder

@@ -28,9 +28,18 @@ struct InsightsView: View {
 
     private struct DayTotal: Identifiable {
         let day: Date
+        /// Every session on the day.
         let focus: TimeInterval
+        /// Only the sessions that were actually reviewed. The honesty chart can
+        /// speak for those and no others: an unreviewed session has no answer,
+        /// and counting its time as "didn't feel real" would put words in the
+        /// user's mouth.
+        let reviewedClock: TimeInterval
+        /// How much of `reviewedClock` the user called real work.
         let honest: TimeInterval
         var id: Date { day }
+        /// The reviewed time they did not count — the top of each bar.
+        var drifted: TimeInterval { max(0, reviewedClock - honest) }
     }
 
     /// Every day in the window, including the empty ones — a missing Wednesday
@@ -42,10 +51,12 @@ struct InsightsView: View {
             guard let day = calendar.date(byAdding: .day, value: -(Self.window - 1 - offset), to: end)
             else { return nil }
             let onDay = grouped[day, default: []]
+            let split = DayReport.honestySplit(of: onDay)
             return DayTotal(
                 day: day,
                 focus: onDay.reduce(0) { $0 + $1.elapsed() },
-                honest: onDay.reduce(0) { $0 + TimeInterval(($1.honestWorkMinutes ?? 0) * 60) }
+                reviewedClock: split.clocked,
+                honest: split.honest
             )
         }
     }
@@ -54,6 +65,15 @@ struct InsightsView: View {
     private var activeDays: Int { days.filter { $0.focus > 0 }.count }
     private var bestDay: DayTotal? { days.max { $0.focus < $1.focus } }
     private var reflected: [WorkSession] { sessions.filter(\.isReflected) }
+
+    /// Totals across the reviewed sessions only, which is all the honesty
+    /// chart claims to describe.
+    private var reviewedClock: TimeInterval { days.reduce(0) { $0 + $1.reviewedClock } }
+    private var honestTotal: TimeInterval { days.reduce(0) { $0 + $1.honest } }
+    private var honestShare: Double { reviewedClock > 0 ? honestTotal / reviewedClock : 0 }
+
+    private static let realLabel = "Felt like real work"
+    private static let driftLabel = "The rest of the clock"
 
     /// Consecutive days ending today that cleared the target.
     private var streak: Int {
@@ -166,33 +186,47 @@ struct InsightsView: View {
 
     @ViewBuilder
     private var honestyChart: some View {
-        section("Time on the clock vs time that felt real",
-                note: reflected.isEmpty ? nil : "\(reflected.count) of \(sessions.count) sessions reviewed") {
+        section("How much of the clocked time felt real",
+                note: reflected.isEmpty
+                    ? nil
+                    : "\(Format.percent(honestShare)) across \(reflected.count) reviewed \(reflected.count == 1 ? "session" : "sessions")") {
             if reflected.isEmpty {
-                empty("Review a session to see how the two compare.")
+                empty("Review a session to see how much of the time on the clock felt real.")
             } else {
-                // Two series, so a legend is required; the honest bar sits
-                // inside the wall-clock bar so the shortfall is the visual.
+                // One bar per day, split rather than overlaid. Two separate
+                // BarMarks at the same x do not draw on top of each other in
+                // Swift Charts — they stack — so plotting "on the clock" and
+                // "felt real" as independent series made the bar as tall as
+                // the two added together and stood the honest part above the
+                // clock it came out of. Reading it literally, the time that
+                // felt real looked like more time than was worked.
+                //
+                // The two parts here are complementary by construction: the
+                // solid share plus the faint remainder is exactly the time
+                // clocked, so stacking them says something true.
                 Chart(days) { day in
                     BarMark(
                         x: .value("Day", day.day, unit: .day),
-                        y: .value("Hours", day.focus / 3600)
+                        y: .value("Hours", day.honest / 3600)
                     )
-                    .foregroundStyle(by: .value("Measure", "On the clock"))
-                    .cornerRadius(3)
+                    .foregroundStyle(by: .value("Measure", Self.realLabel))
+                    .cornerRadius(2)
 
                     BarMark(
                         x: .value("Day", day.day, unit: .day),
-                        y: .value("Hours", day.honest / 3600),
-                        width: .ratio(0.45)
+                        y: .value("Hours", day.drifted / 3600)
                     )
-                    .foregroundStyle(by: .value("Measure", "Felt real"))
+                    .foregroundStyle(by: .value("Measure", Self.driftLabel))
                     .cornerRadius(2)
                 }
-                .chartForegroundStyleScale([
-                    "On the clock": Theme.accent.opacity(0.35),
-                    "Felt real": Theme.accent,
-                ])
+                // Domain and range rather than a dictionary: a dictionary has no
+                // order, and the scale's order is what decides both the legend's
+                // and which half of the bar sits at the bottom. The share that
+                // felt real belongs at the base, growing up from the axis.
+                .chartForegroundStyleScale(
+                    domain: [Self.realLabel, Self.driftLabel],
+                    range: [Theme.accent, Theme.accent.opacity(0.22)]
+                )
                 .chartLegend(position: .top, alignment: .leading, spacing: Theme.Space.m)
                 .chartYAxis {
                     AxisMarks(position: .leading) { value in
@@ -218,6 +252,11 @@ struct InsightsView: View {
                     }
                 }
                 .frame(height: 190)
+
+                Text("Each bar is the time you clocked in sessions you reviewed. The solid part is how much of it you said felt like real work; the faint part is the rest. Sessions you never reviewed are left out — there is no answer to show for them.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

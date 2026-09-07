@@ -427,3 +427,71 @@ struct AppModelTests {
         #expect(model.selectedDate == Calendar.current.startOfDay(for: Date.now))
     }
 }
+
+// MARK: - Midnight
+
+@MainActor
+@Suite("Rolling over at midnight")
+struct MidnightRolloverTests {
+
+    private func model() throws -> AppModel {
+        AppModel(container: try TestStore.inMemory())
+    }
+
+    @Test("a window showing today follows the clock into the new day")
+    func todayFollowsTheClock() throws {
+        let model = try model()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+
+        model.selectedDate = today
+        model.followClockPastMidnight(to: tomorrow)
+
+        // A Mac left running overnight used to still be showing yesterday in
+        // the morning: no now-line, and today's work nowhere on screen.
+        #expect(calendar.isDate(model.selectedDate, inSameDayAs: tomorrow))
+    }
+
+    @Test("a day being read back over is left alone")
+    func anEarlierDayIsNotYanked() throws {
+        let model = try model()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let lastWeek = calendar.date(byAdding: .day, value: -7, to: today)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+
+        model.selectedDate = lastWeek
+        model.followClockPastMidnight(to: tomorrow)
+
+        #expect(calendar.isDate(model.selectedDate, inSameDayAs: lastWeek))
+    }
+
+    @Test("a tick inside the same day changes nothing")
+    func theSameDayIsNotDisturbed() throws {
+        let model = try model()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+
+        model.selectedDate = yesterday
+        model.followClockPastMidnight(to: today)
+
+        #expect(calendar.isDate(model.selectedDate, inSameDayAs: yesterday))
+    }
+
+    @Test("having rolled over once, it keeps following")
+    func itKeepsFollowingOnLaterDays() throws {
+        let model = try model()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let dayAfter = calendar.date(byAdding: .day, value: 2, to: today)!
+
+        model.selectedDate = today
+        model.followClockPastMidnight(to: tomorrow)
+        model.followClockPastMidnight(to: dayAfter)
+
+        #expect(calendar.isDate(model.selectedDate, inSameDayAs: dayAfter))
+    }
+}

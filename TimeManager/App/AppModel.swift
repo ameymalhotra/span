@@ -58,6 +58,11 @@ final class AppModel {
     private(set) var sinceBreakText: String = "--"
     private(set) var percentOfTargetText: String = "0%"
 
+    /// Whether the running session is past its planned end. The clock alone
+    /// cannot say so — it stops at 00:00 and stays there, which reads exactly
+    /// like a session about to start.
+    private(set) var sessionIsOvertime = false
+
     /// The numeric companion to `percentOfTargetText`, for the HUD's target
     /// ring. Quantised to 1/200 of the sweep — a smaller step moves the ring by
     /// less than a point — for the same reason the rest of this block is
@@ -71,6 +76,8 @@ final class AppModel {
 
     private let context: ModelContext
     private var loop: Task<Void, Never>?
+    /// The day boundary the last tick saw, so a rollover can be noticed.
+    private var lastDayStart = Calendar.current.startOfDay(for: .now)
     /// Surfaces that need a one-second clock. The tick slows to 15s when none
     /// are on screen, which is most of the time.
     private var fastConsumers = 0
@@ -167,6 +174,7 @@ final class AppModel {
         context.insert(session)
         save()
         activeSession = session
+        NotificationService.requestAuthorizationIfUndetermined()
         NotificationService.scheduleEndReminder(for: session)
         refreshStats()
         return session
@@ -196,6 +204,7 @@ final class AppModel {
         save()
 
         activeSession = session
+        NotificationService.requestAuthorizationIfUndetermined()
         NotificationService.scheduleEndReminder(for: session)
         refreshStats()
     }
@@ -272,15 +281,39 @@ final class AppModel {
         activeSession = try? context.fetch(descriptor).first
     }
 
+    /// Moves the window on to the new day when midnight passes.
+    ///
+    /// `selectedDate` was set once, at launch, so a Mac left running overnight
+    /// still showed yesterday in the morning: no now-line, today's work
+    /// nowhere to be seen, and the "next day" arrow greyed out because it
+    /// thought yesterday was today.
+    ///
+    /// The date only follows the clock if the window was showing the day that
+    /// has just ended. Someone deliberately reading back over an earlier day is
+    /// left where they are.
+    func followClockPastMidnight(to dayStart: Date, calendar: Calendar = .current) {
+        guard dayStart != lastDayStart else { return }
+        let wasFollowingToday = calendar.isDate(selectedDate, inSameDayAs: lastDayStart)
+        lastDayStart = dayStart
+        guard wasFollowingToday else { return }
+        selectedDate = dayStart
+    }
+
     private func refreshStats() {
         let now = Date.now
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: now)
 
+        followClockPastMidnight(to: dayStart, calendar: calendar)
+        NotificationService.announceEndIfDue(for: activeSession, at: now)
+
         if let session = activeSession {
-            sessionClock = Format.clock(session.remaining(at: now))
+            let remaining = session.remaining(at: now)
+            sessionClock = Format.clock(remaining)
+            sessionIsOvertime = remaining <= 0 && session.status == .active
         } else {
             sessionClock = "00:00"
+            sessionIsOvertime = false
         }
 
         // Deliberately not `startedAt >= dayStart`: a session begun at 23:30 and

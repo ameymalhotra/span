@@ -40,6 +40,9 @@ enum Theme {
         static let accent = Color(rgbHex: 0x2FD3BC)
         /// Dividers, the target ring's unfilled track, and the hairline border.
         static let line = Color.white.opacity(0.16)
+        /// A session past its planned end. Warm rather than alarming — the time
+        /// running out is information, not a failure.
+        static let overtime = Color(rgbHex: 0xFFA23E)
     }
 
     // MARK: - Surfaces

@@ -14,6 +14,7 @@ struct SettingsPaneView: View {
     @AppStorage("userName") private var userName = ""
     @AppStorage("personalNote") private var personalNote = ""
     @AppStorage("update.checkAutomatically") private var checksForUpdates = true
+    @AppStorage(NotificationService.soundEnabledKey) private var endSound = true
     /// Which destructive action is awaiting confirmation, if any.
     private enum PendingErase: String, Identifiable {
         case activity, everything
@@ -164,7 +165,18 @@ struct SettingsPaneView: View {
 
     private var alerts: some View {
         section("Alerts and the HUD") {
-            row("Session end reminder", detail: "Notifies you when a timed session runs out.") {
+            row("Sound when time is up",
+                detail: "Plays a chime and bounces Span in the Dock the moment a session's planned time runs out. Needs no permission from macOS.") {
+                Toggle("", isOn: $endSound)
+                    .accessibilityIdentifier("settings.endSound")
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            Divider()
+
+            row("Session end notification",
+                detail: "A macOS banner as well, which also reaches you when Span is hidden. This one macOS has to allow.") {
                 Toggle("", isOn: $notificationsEnabled)
                     .accessibilityIdentifier("settings.notifications")
                     .labelsHidden()

@@ -132,8 +132,10 @@ struct GuideView: View {
                     "How long without input counts as a break. Shorter means breaks are caught accurately, but reading a long document counts as away. Longer means fewer false breaks, but a coffee run gets billed as work. Five minutes suits most people; two if you want the break counter to be strict.")
             setting("Window titles",
                     "Turns app-level tracking into document-level tracking. Worth it if you want to know which project you were in; skip it if window titles in your work are sensitive.")
-            setting("Session end reminder",
-                    "A notification when a timed session runs out, so you can leave the window closed.")
+            setting("Sound when time is up",
+                    "A chime and a Dock bounce the moment a session's planned time runs out. On by default, and it needs no permission from macOS.")
+            setting("Session end notification",
+                    "A banner as well, so the end reaches you with the window closed. This one macOS has to allow; Span asks the first time you start a session.")
         }
     }
 

@@ -62,6 +62,17 @@ struct TimelineGeometry {
         let bottom = y(for: block.end)
         return (top, max(minimumHeight, bottom - top))
     }
+
+    /// Where a panel anchored beside a block should sit so that all of it stays
+    /// inside the day.
+    ///
+    /// The timeline's scroll content is exactly `totalHeight` tall, so a panel
+    /// running past the bottom is cut off rather than scrolled to — which is
+    /// what happened to every block late in the evening while this was clamped
+    /// against an assumed height instead of the panel's real one.
+    func panelTop(anchoredAt anchor: CGFloat, height: CGFloat, inset: CGFloat = 8) -> CGFloat {
+        min(max(0, anchor - inset), max(0, totalHeight - height - inset))
+    }
 }
 
 /// A block together with the horizontal slot it should occupy.
