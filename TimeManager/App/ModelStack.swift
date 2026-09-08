@@ -97,7 +97,8 @@ enum ModelStack {
     /// reset cannot take out anything the system keeps alongside them.
     static let preferenceKeys = [
         "userName", "personalNote", "dailyFocusTargetMinutes", "defaultSessionMinutes",
-        "idleThresholdMinutes", "hud.visible", "hud.xFraction", "hud.topOffset",
+        "idleThresholdMinutes", "autoFinishAfterMinutes",
+        "hud.visible", "hud.xFraction", "hud.topOffset",
         "hasOnboarded", "hasSeenGuide", "timeline.hourHeight", "timelineGrouping",
         "pickUpDismissed",
     ]
@@ -204,6 +205,31 @@ enum ModelStack {
             session.complete(at: lastKnownGood)
             NotificationService.cancelReminder(for: session)
         }
+        try? context.save()
+    }
+
+    /// Brings review answers back inside the sessions they describe.
+    ///
+    /// The review asks how much of a session felt like real work, ceilinged by
+    /// what the session had elapsed when it was answered. Shorten the session
+    /// afterwards and that answer is left behind: a session left running
+    /// overnight, reviewed at nineteen hours and then corrected to two, went on
+    /// contributing nineteen hours to the day's honest-work total.
+    ///
+    /// Every reader now caps the answer as it reads it, so this is only about
+    /// the stored number — but leaving a figure on disk that no view will agree
+    /// with is how the next inconsistency starts.
+    @MainActor
+    static func clampReviewsToWorkedTime(in context: ModelContext, now: Date = .now) {
+        let completed = SessionStatus.completed.rawValue
+        let descriptor = FetchDescriptor<WorkSession>(
+            predicate: #Predicate { $0.statusRaw == completed && $0.honestWorkMinutes != nil }
+        )
+        guard let sessions = try? context.fetch(descriptor) else { return }
+        for session in sessions {
+            session.clampReviewToWorkedTime(at: now)
+        }
+        guard context.hasChanges else { return }
         try? context.save()
     }
 }

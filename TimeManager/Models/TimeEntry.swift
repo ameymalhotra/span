@@ -24,4 +24,14 @@ final class TimeEntry {
     }
 
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
+
+    /// The part of the block that falls inside `range`.
+    ///
+    /// The same arithmetic `WorkSession.elapsed(in:)` does, and for the same
+    /// reasons: a block belongs to the hours it actually covers, and a day
+    /// total that is passed a range ending at "now" cannot count the part of a
+    /// block that has not happened yet.
+    func duration(in range: ClosedRange<Date>) -> TimeInterval {
+        max(0, min(endedAt, range.upperBound).timeIntervalSince(max(startedAt, range.lowerBound)))
+    }
 }

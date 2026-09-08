@@ -25,6 +25,10 @@ enum Theme {
     /// The now-indicator. Deliberately the one hot colour in the timeline.
     static let now = Color.adaptive(light: 0xE0322A, dark: 0xFF544A)
 
+    /// Breaks. An indigo well away from the working teal, so a glance at the
+    /// pane says which of the two clocks is running without reading a word.
+    static let rest = Color.adaptive(light: 0x5A5FD1, dark: 0x9AA0FF)
+
     /// The floating HUD's palette.
     ///
     /// Fixed rather than adaptive: the pill forces a dark appearance because it

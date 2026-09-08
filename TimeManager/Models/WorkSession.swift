@@ -92,6 +92,35 @@ final class WorkSession {
     /// True once the user has actually filled in the post-session review.
     var isReflected: Bool { reflectionState == .completed && focusRating != nil }
 
+    /// What the user called real work, and never more than the session ran for.
+    ///
+    /// The review records a plain number of minutes, ceilinged by whatever the
+    /// session had elapsed at the moment it was answered. Shorten the session
+    /// afterwards — correcting one left running overnight, say — and that
+    /// number outlives the run it describes: nineteen hours of honest work
+    /// inside a two-hour session, and a day claiming twenty hours of it.
+    func honestWork(at date: Date = .now) -> TimeInterval {
+        guard let honestWorkMinutes else { return 0 }
+        return min(TimeInterval(max(0, honestWorkMinutes) * 60), elapsed(at: date))
+    }
+
+    /// Writes that ceiling back down, for when the session's extent has just
+    /// been edited. Only ever lowers the answer: the user said at most this
+    /// much of the session was real, and the session is now shorter.
+    func clampReviewToWorkedTime(at date: Date = .now) {
+        guard let minutes = honestWorkMinutes else { return }
+        if minutes > workedMinutes(at: date) { honestWorkMinutes = workedMinutes(at: date) }
+    }
+
+    /// The session's length in whole minutes, rounded rather than truncated.
+    ///
+    /// Times set by hand land a fraction of a second short — a two-hour session
+    /// edited to the minute measures 7199.999997 seconds — and truncating that
+    /// shaves a minute off every answer it ceilings.
+    func workedMinutes(at date: Date = .now) -> Int {
+        max(0, Int((elapsed(at: date) / 60).rounded()))
+    }
+
     /// Finished, but the user has not answered either way — the sheet is still
     /// owed. These must not be counted as "zero focus" in any summary.
     var needsReflection: Bool {

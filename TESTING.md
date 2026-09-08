@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-262 tests, about a second.
+329 tests, about a second.
 
 ## Nothing touches your real data
 

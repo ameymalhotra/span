@@ -16,6 +16,10 @@ struct AppModelTests {
     init() throws {
         container = try TestStore.inMemory()
         model = AppModel(container: container)
+        // The abandonment check reads the system-wide idle clock, so on a
+        // machine nobody has touched for an hour it would finish the sessions
+        // these tests start. Every test drives it explicitly instead.
+        model.idleClock = { 0 }
     }
 
     private func sessions() throws -> [WorkSession] {
@@ -299,6 +303,30 @@ struct AppModelTests {
         #expect(model.focusTodayText == "1h 30m")
     }
 
+    @Test("a block added for earlier today counts towards the day's focus")
+    func focusTodayCountsHandMadeBlocks() async throws {
+        // Adding an hour you worked away from the Mac used to move the timeline
+        // and nothing else — least of all the goal it was meant to count for.
+        let start = Date.now.addingTimeInterval(-Clock.minutes(50))
+        Fixture.entry(in: context, from: start, to: start.addingTimeInterval(Clock.minutes(30)))
+        try context.save()
+
+        await awaitStatsRefresh()
+        #expect(model.focusToday == Clock.minutes(30))
+        #expect(model.focusTodayText == "30m")
+    }
+
+    @Test("a block still to come is not counted until it happens")
+    func focusTodayIgnoresBlocksInTheFuture() async throws {
+        let start = Date.now.addingTimeInterval(Clock.minutes(30))
+        Fixture.entry(in: context, from: start, to: start.addingTimeInterval(Clock.minutes(30)))
+        try context.save()
+
+        await awaitStatsRefresh()
+        #expect(model.focusToday == 0)
+        #expect(model.focusTodayText == "0m")
+    }
+
     @Test("the target percentage tracks the goal")
     func percentOfTarget() async throws {
         let defaults = UserDefaults.standard
@@ -425,6 +453,209 @@ struct AppModelTests {
     @Test("the selected day starts at today, at midnight")
     func selectedDateDefault() {
         #expect(model.selectedDate == Calendar.current.startOfDay(for: Date.now))
+    }
+
+    // MARK: - Breaks
+
+    @Test("a break pauses the session it interrupts")
+    func aBreakPausesTheSession() throws {
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        model.startBreak(minutes: 10)
+
+        #expect(model.isOnBreak)
+        #expect(session.status == .paused, "the break was being counted as work")
+        #expect(model.breakRemaining(at: Date.now.addingTimeInterval(Clock.minutes(4))) > 0)
+    }
+
+    @Test("coming back from a break starts the session again")
+    func endingABreakResumesTheSession() throws {
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        model.startBreak(minutes: 10)
+        model.endBreak()
+
+        #expect(!model.isOnBreak)
+        #expect(session.status == .active)
+    }
+
+    @Test("a break that simply runs out leaves the session paused")
+    func aBreakRunningOutDoesNotResumeWork() throws {
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        model.startBreak(minutes: 5)
+
+        // Nobody has said they are back at the desk.
+        model.finishBreakIfDue(at: Date.now.addingTimeInterval(Clock.minutes(6)))
+
+        #expect(!model.isOnBreak)
+        #expect(session.status == .paused)
+    }
+
+    @Test("a session paused before the break is left paused after it")
+    func aBreakDoesNotResumeWhatItDidNotPause() throws {
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        model.pauseSession()
+        model.startBreak(minutes: 10)
+        model.endBreak()
+
+        #expect(session.status == .paused)
+    }
+
+    @Test("a break can be lengthened while it runs")
+    func aBreakCanBeExtended() {
+        let now = Date.now
+        model.startBreak(minutes: 5, at: now)
+        model.extendBreak(byMinutes: 5)
+
+        #expect(model.breakLength == Clock.minutes(10))
+        #expect(model.breakRemaining(at: now.addingTimeInterval(Clock.minutes(9))) > 0)
+    }
+
+    @Test("starting work ends the break rather than leaving both running")
+    func startingASessionEndsTheBreak() {
+        model.startBreak(minutes: 10)
+        model.startSession(title: "Write", category: "Deep Work", minutes: 30)
+
+        #expect(!model.isOnBreak)
+        #expect(model.activeSession?.status == .active)
+    }
+
+    @Test("finishing a session offers a break, and an automatic finish does not")
+    func breakIsOfferedAfterAFinishedSession() throws {
+        model.startSession(title: "Write", category: "Deep Work", minutes: 60)
+        _ = model.finishSession()
+        #expect(model.offersBreakAfterReview)
+
+        model.offersBreakAfterReview = false
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Evening", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(10)))
+            model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9))
+            #expect(!model.offersBreakAfterReview, "nobody abandoned a session waiting to be told to rest")
+        }
+    }
+
+    @Test("ending a break nobody started is harmless")
+    func endingABreakThatIsNotRunning() {
+        model.endBreak()
+        #expect(!model.isOnBreak)
+    }
+
+    // MARK: - Sessions left running
+
+    /// Moves a just-started session back in time, run and all, so it looks like
+    /// one that has been going for hours.
+    private func backdate(_ session: WorkSession, to start: Date) {
+        session.startedAt = start
+        session.segments.first?.startedAt = start
+    }
+
+    /// `@AppStorage` writes through to the real defaults, so the preference is
+    /// put back afterwards the way the daily-target test does it.
+    private func withGrace(minutes: Int, _ body: () throws -> Void) rethrows {
+        let defaults = UserDefaults.standard
+        let original = defaults.object(forKey: "autoFinishAfterMinutes")
+        defer {
+            if let original { defaults.set(original, forKey: "autoFinishAfterMinutes") }
+            else { defaults.removeObject(forKey: "autoFinishAfterMinutes") }
+        }
+        model.autoFinishAfterMinutes = minutes
+        try body()
+    }
+
+    @Test("a session left running is finished where the user stopped, not where they came back")
+    func abandonedSessionEndsAtTheLastInput() throws {
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(10)))
+
+            // Ten hours ago, and untouched for nine of them: the evening's hour
+            // of work, not the whole night.
+            let finished = try #require(model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9)))
+            #expect(finished.id == session.id)
+            #expect(finished.status == .completed)
+            #expect(model.activeSession == nil)
+            #expect(abs(finished.elapsed(at: now) - Clock.hours(1)) < 1)
+        }
+    }
+
+    @Test("a session being worked on is left alone")
+    func aWorkedSessionIsLeftRunning() throws {
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(2)))
+
+            #expect(model.autoFinishIfAbandoned(at: now, idleFor: Clock.minutes(4)) == nil)
+            #expect(model.activeSession?.id == session.id)
+            #expect(session.status == .active)
+        }
+    }
+
+    @Test("a session is never ended before it began")
+    func aSessionStartedWhileAwayIsMeasuredFromItsOwnStart() throws {
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Read", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.minutes(5)))
+
+            // Input stopped two hours ago, but the session is five minutes old:
+            // it has not been abandoned for the grace period yet.
+            #expect(model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(2)) == nil)
+            #expect(model.activeSession?.id == session.id)
+        }
+    }
+
+    @Test("a session left paused is closed where it paused")
+    func anAbandonedPausedSessionIsClosed() throws {
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(3)))
+            model.pauseSession()
+            session.pausedAt = now.addingTimeInterval(-Clock.hours(2))
+            session.segments.first?.endedAt = now.addingTimeInterval(-Clock.hours(2))
+
+            let finished = try #require(model.autoFinishIfAbandoned(at: now, idleFor: 0))
+            #expect(finished.status == .completed)
+            #expect(abs(finished.elapsed(at: now) - Clock.hours(1)) < 1)
+            // Until it is closed, no new session can be started.
+            #expect(model.startSession(title: "Next", category: "Admin", minutes: 30) != nil)
+        }
+    }
+
+    @Test("turning the grace off leaves every session to the user")
+    func theGraceCanBeTurnedOff() throws {
+        try withGrace(minutes: 0) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(10)))
+
+            #expect(model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9)) == nil)
+            #expect(model.activeSession?.id == session.id)
+        }
+    }
+
+    @Test("an automatically finished session is still owed its review, and says so")
+    func anAutoFinishedSessionQueuesTheReview() throws {
+        try withGrace(minutes: 30) {
+            let now = Date.now
+            let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+            backdate(session, to: now.addingTimeInterval(-Clock.hours(10)))
+
+            let finished = try #require(model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9)))
+            #expect(model.pendingReflection?.id == finished.id)
+            #expect(model.pendingReflectionWasAutomatic)
+            #expect(finished.needsReflection)
+        }
+    }
+
+    @Test("a session the user finishes is not reported as automatic")
+    func aManualFinishIsNotFlagged() throws {
+        model.startSession(title: "Write", category: "Deep Work", minutes: 60)
+        _ = model.finishSession()
+        #expect(model.pendingReflection != nil)
+        #expect(!model.pendingReflectionWasAutomatic)
     }
 }
 

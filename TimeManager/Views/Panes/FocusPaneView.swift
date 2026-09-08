@@ -41,9 +41,10 @@ struct FocusPaneView: View {
                               sort: \.startedAt)
     }
 
-    private var focusToday: TimeInterval {
-        todaySessions.reduce(0) { $0 + $1.elapsed() }
-    }
+    /// The day's total comes from the model, which counts sessions and
+    /// hand-made blocks alike — the same number the status bar and the HUD
+    /// show, rather than a second opinion computed here.
+    private var focusToday: TimeInterval { model.focusToday }
 
     private var targetFraction: Double {
         let target = TimeInterval(max(1, targetMinutes) * 60)
@@ -101,7 +102,9 @@ struct FocusPaneView: View {
     var body: some View {
         ZStack {
             Theme.canvas
-            if let session = model.activeSession {
+            if model.isOnBreak {
+                onBreak
+            } else if let session = model.activeSession {
                 running(session)
             } else {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -152,6 +155,14 @@ struct FocusPaneView: View {
             .foregroundStyle(Theme.onAccent)
             .controlSize(.large)
             .keyboardShortcut("n", modifiers: .command)
+
+            HStack(spacing: Theme.Space.m) {
+                Text("Take a break")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                BreakOptions { model.startBreak(minutes: $0) }
+                Spacer(minLength: 0)
+            }
 
             if !pickUpAgain.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -401,6 +412,77 @@ struct FocusPaneView: View {
                     .buttonStyle(.link)
                     .font(Theme.Font.caption)
             }
+
+            // Starting a break here pauses the session, which is the whole
+            // reason to offer it from inside one: a break counted as work is
+            // the arithmetic this app exists to avoid.
+            HStack(spacing: Theme.Space.s) {
+                Text("Break")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+                BreakOptions { model.startBreak(minutes: $0) }
+            }
+        }
+    }
+
+    // MARK: - On a break
+
+    private var onBreak: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = model.breakRemaining(at: context.date)
+            let length = max(1, model.breakLength)
+            let progress = min(1, max(0, (length - remaining) / length))
+
+            VStack(spacing: Theme.Space.xl) {
+                VStack(spacing: Theme.Space.xs) {
+                    Text("ON A BREAK")
+                        .font(Theme.Font.sectionHeader)
+                        .tracking(0.8)
+                        .foregroundStyle(Theme.rest)
+                    Text(model.breakEndsAt.map { "Back at \(Format.timeOfDay($0))" } ?? "")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(Theme.label)
+                }
+
+                ProgressRing(progress: progress, colour: Theme.rest, diameter: 248, width: 7) {
+                    VStack(spacing: Theme.Space.xs) {
+                        Text(Format.clock(remaining))
+                            .font(Theme.Font.timer)
+                            .foregroundStyle(Theme.label)
+                        Text("left of \(Format.compact(length))")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.secondaryLabel)
+                    }
+                }
+
+                VStack(spacing: Theme.Space.m) {
+                    HStack(spacing: Theme.Space.m) {
+                        Button("Add 5 minutes") { model.extendBreak(byMinutes: 5) }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("break.extend")
+                        Button(model.sessionPausedForBreak ? "Back to work" : "End break") {
+                            model.endBreak()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.rest)
+                        .foregroundStyle(.white)
+                        .accessibilityIdentifier("break.end")
+                    }
+                    .controlSize(.large)
+
+                    if model.sessionPausedForBreak {
+                        Text("Your session is paused. Coming back starts it again.")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(Theme.tertiaryLabel)
+                    }
+                }
+
+                Text("\(Format.compact(focusToday)) focused today · \(Format.percent(targetFraction)) of target")
+                    .font(Theme.Font.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.tertiaryLabel)
+            }
+            .padding(Theme.Space.xxl)
         }
     }
 }

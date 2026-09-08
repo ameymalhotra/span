@@ -6,7 +6,22 @@ struct MenuBarPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            if let session = model.activeSession {
+            if model.isOnBreak {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("On a break")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(model.breakClock + " left")
+                        .font(Theme.Font.caption.monospacedDigit())
+                        .foregroundStyle(Theme.secondaryLabel)
+                }
+                Button(model.sessionPausedForBreak ? "Back to work" : "End break") {
+                    model.endBreak()
+                }
+                .accessibilityIdentifier("menuBar.endBreak")
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.rest)
+                .foregroundStyle(.white)
+            } else if let session = model.activeSession {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.title)
                         .font(.system(size: 13, weight: .semibold))

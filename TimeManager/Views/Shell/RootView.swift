@@ -52,6 +52,7 @@ struct RootView: View {
     private static let minimumWidth: CGFloat = sidebarWidth + centreMinimum + timelineMinimum + 40
     private static let minimumHeight: CGFloat = 620
     @State private var isStartingSession = false
+    @State private var isOfferingBreak = false
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
 
     var body: some View {
@@ -99,8 +100,24 @@ struct RootView: View {
         }
         // Bound to the model, so a session finished from the menu bar or the
         // HUD raises the review here too.
-        .sheet(item: $model.pendingReflection) { session in
-            ReflectionView(session: session)
+        .sheet(item: $model.pendingReflection, onDismiss: {
+            // Only once the review is closed: two sheets at once would put the
+            // break behind the thing it is asking about.
+            guard model.offersBreakAfterReview else { return }
+            model.offersBreakAfterReview = false
+            isOfferingBreak = true
+        }) { session in
+            ReflectionView(session: session,
+                           endedAutomatically: model.pendingReflectionWasAutomatic)
+        }
+        .sheet(isPresented: $isOfferingBreak) {
+            BreakPromptView(
+                start: { minutes in
+                    model.startBreak(minutes: minutes)
+                    isOfferingBreak = false
+                },
+                decline: { isOfferingBreak = false }
+            )
         }
     }
 

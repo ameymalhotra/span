@@ -10,6 +10,7 @@ struct InsightsView: View {
     @AppStorage("dailyFocusTargetMinutes") private var targetMinutes = 300
 
     @Query private var sessions: [WorkSession]
+    @Query private var entries: [TimeEntry]
     @Query private var activity: [ActivityRecord]
 
     private let calendar = Calendar.current
@@ -22,6 +23,10 @@ struct InsightsView: View {
         let start = cal.date(byAdding: .day, value: -Self.window, to: end) ?? end
         _sessions = Query(filter: #Predicate<WorkSession> { $0.startedAt >= start && $0.startedAt < end },
                           sort: \.startedAt)
+        // Hand-made blocks are part of the day's focus, so the totals, the
+        // streak and the daily average all have to see them.
+        _entries = Query(filter: #Predicate<TimeEntry> { $0.startedAt >= start && $0.startedAt < end },
+                         sort: \.startedAt)
         _activity = Query(filter: #Predicate<ActivityRecord> { $0.startedAt >= start && $0.startedAt < end },
                           sort: \.startedAt)
     }
@@ -47,14 +52,21 @@ struct InsightsView: View {
     private var days: [DayTotal] {
         let end = calendar.startOfDay(for: anchor)
         let grouped = Dictionary(grouping: sessions) { calendar.startOfDay(for: $0.startedAt) }
+        let groupedEntries = Dictionary(grouping: entries) { calendar.startOfDay(for: $0.startedAt) }
+        let now = Date.now
         return (0..<Self.window).compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: -(Self.window - 1 - offset), to: end)
             else { return nil }
             let onDay = grouped[day, default: []]
             let split = DayReport.honestySplit(of: onDay)
+            // Blocks have no review to speak of, so they add to the day's focus
+            // and stay out of the honesty split entirely.
+            let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+            let counted = day...max(day, min(now, dayEnd))
+            let blocked = groupedEntries[day, default: []].reduce(0) { $0 + $1.duration(in: counted) }
             return DayTotal(
                 day: day,
-                focus: onDay.reduce(0) { $0 + $1.elapsed() },
+                focus: onDay.reduce(0) { $0 + $1.elapsed() } + blocked,
                 reviewedClock: split.clocked,
                 honest: split.honest
             )
@@ -89,6 +101,9 @@ struct InsightsView: View {
         var totals: [String: TimeInterval] = [:]
         for session in sessions {
             totals[session.category.isEmpty ? "Uncategorised" : session.category, default: 0] += session.elapsed()
+        }
+        for entry in entries {
+            totals[entry.category.isEmpty ? "Uncategorised" : entry.category, default: 0] += entry.duration
         }
         for record in activity where !record.isIdle {
             totals[record.categoryName ?? record.appName, default: 0] += record.duration

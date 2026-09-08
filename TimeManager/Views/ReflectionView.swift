@@ -6,12 +6,19 @@ struct ReflectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     let session: WorkSession
+    /// True when Span ended the session because it was left running, so the
+    /// sheet can account for a session the user never finished themselves.
+    var endedAutomatically = false
 
     @State private var focus = 3
     /// Starts unset rather than pre-filled. Defaulting this to the full elapsed
     /// time anchors the user on the flattering answer before they have thought
     /// about it, which is the opposite of what an honest review is for.
     @State private var honestMinutes: Int?
+    /// What is actually in the field. Kept alongside the number so a
+    /// half-typed or emptied entry is not snapped to something else under the
+    /// cursor.
+    @State private var honestDraft = ""
     @State private var distractions = 0
     @State private var note = ""
 
@@ -38,6 +45,13 @@ struct ReflectionView: View {
             Text("Be kind and honest — this is for you, not a scorecard.")
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.secondaryLabel)
+            if endedAutomatically {
+                Label("Finished for you at \(Format.timeOfDay(session.endedAt ?? .now)), where you stopped — it was left running.",
+                      systemImage: "moon.zzz")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .accessibilityIdentifier("reflection.autoFinished")
+            }
         }
         .padding(Theme.Space.l)
     }
@@ -54,19 +68,24 @@ struct ReflectionView: View {
             }
 
             Section("How much of it felt like real work?") {
-                HStack {
-                    Stepper(
-                        value: Binding(
-                            get: { honestMinutes ?? maximumMinutes },
-                            set: { honestMinutes = $0 }
-                        ),
-                        in: 0...maximumMinutes
-                    ) {
-                        Text(honestMinutes.map { "\($0) of \(maximumMinutes) minutes" }
-                             ?? "Not set")
-                            .foregroundStyle(honestMinutes == nil ? Theme.tertiaryLabel : Theme.label)
-                    }
-                    .accessibilityIdentifier("reflection.honestMinutes")
+                // A field first, arrows second. Stepping to 40 of 95 minutes is
+                // forty presses; the number is quicker to type than to nudge.
+                HStack(spacing: Theme.Space.s) {
+                    TextField("Minutes", text: $honestDraft, prompt: Text("Not set"))
+                        .accessibilityIdentifier("reflection.honestMinutes")
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 72)
+                        .onChange(of: honestDraft) { _, new in commitHonestMinutes(new) }
+                    Stepper("", value: Binding(
+                        get: { honestMinutes ?? maximumMinutes },
+                        set: { setHonestMinutes($0) }
+                    ), in: 0...maximumMinutes)
+                    .labelsHidden()
+                    .accessibilityIdentifier("reflection.honestMinutesStepper")
+                    Text("of \(maximumMinutes) minutes")
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(Theme.secondaryLabel)
+                    Spacer(minLength: 0)
                 }
             }
 
@@ -113,6 +132,24 @@ struct ReflectionView: View {
             .keyboardShortcut(.defaultAction)
         }
         .padding(Theme.Space.l)
+    }
+
+    /// Takes what has been typed, without fighting the typist: an empty field
+    /// is "not set" rather than zero, and anything that is not a number leaves
+    /// the last good value alone instead of snapping to it mid-keystroke.
+    private func commitHonestMinutes(_ text: String) {
+        let digits = text.filter(\.isNumber)
+        if digits != text { honestDraft = digits; return }
+        guard let value = Int(digits) else { honestMinutes = nil; return }
+        let clamped = min(max(value, 0), maximumMinutes)
+        honestMinutes = clamped
+        if clamped != value { honestDraft = "\(clamped)" }
+    }
+
+    private func setHonestMinutes(_ value: Int) {
+        let clamped = min(max(value, 0), maximumMinutes)
+        honestMinutes = clamped
+        honestDraft = "\(clamped)"
     }
 
     private func save() {

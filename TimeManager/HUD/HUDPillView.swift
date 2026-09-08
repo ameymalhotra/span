@@ -96,15 +96,24 @@ struct HUDPillView: View {
     /// The middle stat counts down while a session runs and reports the day's
     /// total otherwise — the number you actually want at each moment.
     private var primaryValue: String {
-        model.activeSession == nil ? model.focusTodayText : model.sessionClock
+        if model.isOnBreak { return model.breakClock }
+        return model.activeSession == nil ? model.focusTodayText : model.sessionClock
     }
     private var primaryCaption: String {
+        // A break is what is happening, so it takes the live number — otherwise
+        // the pill counts down a session that is paused behind it.
+        if model.isOnBreak { return "BREAK" }
         if model.sessionIsOvertime { return "TIME UP" }
         return model.activeSession == nil ? "FOCUS TODAY" : "REMAINING"
     }
 
     @ViewBuilder
     private var menuContents: some View {
+        if model.isOnBreak {
+            Button("End Break") { model.endBreak() }
+                .accessibilityIdentifier("hud.endBreak")
+            Divider()
+        }
         if let session = model.activeSession {
             if session.status == .paused {
                 Button("Resume Session") { model.resumeSession() }

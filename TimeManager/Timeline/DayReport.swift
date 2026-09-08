@@ -78,15 +78,24 @@ struct DayReport {
         let entryBlocks = entries.map(TimelineBlock.block(for:))
         let activityBlocks = activity.map(TimelineBlock.block(for:))
 
+        // Blocks drawn by hand are work the user is vouching for, so they
+        // count towards the day beside the sessions — but only as far as now,
+        // since a block drawn across the afternoon is a plan until it arrives.
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: day)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+        let counted = dayStart...max(dayStart, min(now, dayEnd))
+
         self.day = day
         self.blocks = sessionBlocks + entryBlocks + activityBlocks
         self.focusedTime = sessions.reduce(0) { $0 + $1.elapsed(at: now) }
+            + entries.reduce(0) { $0 + $1.duration(in: counted) }
         self.trackedTime = activity.filter { !$0.isIdle }.reduce(0) { $0 + $1.duration }
 
         let completed = sessions.filter { $0.status == .completed }
         self.completedCount = completed.count
         self.reflectedCount = completed.filter(\.isReflected).count
-        self.honestWorkTime = completed.reduce(0) { $0 + TimeInterval(($1.honestWorkMinutes ?? 0) * 60) }
+        self.honestWorkTime = completed.reduce(0) { $0 + $1.honestWork(at: now) }
         self.distractions = completed.reduce(0) { $0 + ($1.distractions ?? 0) }
 
         // Category totals span every source, so a day reads consistently whether
@@ -117,7 +126,7 @@ struct DayReport {
     static func honestySplit(of sessions: [WorkSession]) -> (clocked: TimeInterval, honest: TimeInterval) {
         let reviewed = sessions.filter(\.isReflected)
         let clocked = reviewed.reduce(0) { $0 + $1.elapsed() }
-        let honest = reviewed.reduce(0) { $0 + TimeInterval(($1.honestWorkMinutes ?? 0) * 60) }
+        let honest = reviewed.reduce(0) { $0 + $1.honestWork() }
         return (clocked, min(honest, clocked))
     }
 

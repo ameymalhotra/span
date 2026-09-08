@@ -346,6 +346,65 @@ struct WorkSessionTests {
         #expect(session.reflectionStateRaw == "skipped")
     }
 
+    @Test("the honest answer is what the user said, when it fits the session")
+    func honestWorkWithinTheSession() {
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 11))],
+            focusRating: 3, honestWorkMinutes: 75, reflectionState: .completed)
+        #expect(session.honestWork(at: Clock.at(hour: 12)) == Clock.minutes(75))
+    }
+
+    @Test("an answer left behind by a shortened session cannot outgrow it")
+    func honestWorkIsCappedByTheTimeWorked() {
+        // Reviewed as a nineteen-hour session — one left running overnight —
+        // and then corrected to the two hours actually worked.
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 19), Clock.at(hour: 21))],
+            focusRating: 3, honestWorkMinutes: 1143, reflectionState: .completed)
+        #expect(session.honestWork(at: Clock.at(hour: 22)) == Clock.hours(2))
+    }
+
+    @Test("an unanswered review is no honest work")
+    func honestWorkWithoutAnAnswer() {
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 11))])
+        #expect(session.honestWork(at: Clock.at(hour: 12)) == 0)
+    }
+
+    @Test("a session a hair short of the whole minute still measures the whole minute")
+    func workedMinutesRoundsRatherThanTruncates() {
+        // Times set by hand land fractionally short — this is a real two-hour
+        // session, stored as 7199.999997 seconds.
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 19), Clock.at(hour: 21).addingTimeInterval(-0.000003))])
+        #expect(session.workedMinutes(at: Clock.at(hour: 22)) == 120)
+
+        session.honestWorkMinutes = 120
+        session.clampReviewToWorkedTime(at: Clock.at(hour: 22))
+        #expect(session.honestWorkMinutes == 120, "a minute was shaved off an answer that fitted")
+    }
+
+    @Test("clamping writes the ceiling down, and only ever downwards")
+    func clampingLowersTheAnswer() {
+        let stale = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 19), Clock.at(hour: 21))],
+            focusRating: 3, honestWorkMinutes: 1143, reflectionState: .completed)
+        stale.clampReviewToWorkedTime(at: Clock.at(hour: 22))
+        #expect(stale.honestWorkMinutes == 120)
+
+        let modest = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 11))],
+            focusRating: 3, honestWorkMinutes: 40, reflectionState: .completed)
+        modest.clampReviewToWorkedTime(at: Clock.at(hour: 12))
+        #expect(modest.honestWorkMinutes == 40, "an answer that fits was rewritten")
+    }
+
     // MARK: - Storage
 
     @Test("deleting a session takes its runs with it")
@@ -366,5 +425,46 @@ struct WorkSessionTests {
     func segmentBackReference() {
         let session = Fixture.session(in: context, segments: [(Clock.at(hour: 9), Clock.at(hour: 10))])
         #expect(session.segments.first?.session?.id == session.id)
+    }
+}
+
+// MARK: - Blocks
+
+/// A hand-made block is the third source of time in the app, and since it now
+/// counts towards the day's focus its arithmetic has to hold up the same way a
+/// session's does.
+@MainActor
+@Suite("TimeEntry")
+struct TimeEntryTests {
+
+    private let container: ModelContainer
+    private var context: ModelContext { container.mainContext }
+
+    init() throws { container = try TestStore.inMemory() }
+
+    @Test("a block inside the window counts whole")
+    func wholeBlock() {
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 9), to: Clock.at(hour: 11))
+        #expect(entry.duration(in: Clock.dayStart...Clock.at(hour: 18)) == Clock.hours(2))
+    }
+
+    @Test("a block is clipped to the window at both ends")
+    func clippedBlock() {
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 8), to: Clock.at(hour: 12))
+        #expect(entry.duration(in: Clock.at(hour: 9)...Clock.at(hour: 11)) == Clock.hours(2))
+    }
+
+    @Test("a block wholly outside the window counts for nothing")
+    func blockOutsideTheWindow() {
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 20), to: Clock.at(hour: 21))
+        #expect(entry.duration(in: Clock.dayStart...Clock.at(hour: 18)) == 0)
+    }
+
+    @Test("a block that crosses midnight is split between the days")
+    func blockAcrossMidnight() {
+        let midnight = Clock.dayStart.addingTimeInterval(Clock.hours(24))
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 23), to: midnight.addingTimeInterval(Clock.hours(1)))
+        #expect(entry.duration(in: Clock.dayStart...midnight) == Clock.hours(1))
+        #expect(entry.duration(in: midnight...midnight.addingTimeInterval(Clock.hours(24))) == Clock.hours(1))
     }
 }

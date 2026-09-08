@@ -10,6 +10,7 @@ struct SettingsPaneView: View {
     @AppStorage("dailyFocusTargetMinutes") private var targetMinutes = 300
     @AppStorage("defaultSessionMinutes") private var defaultSessionMinutes = 60
     @AppStorage("idleThresholdMinutes") private var idleThresholdMinutes = 5
+    @AppStorage("autoFinishAfterMinutes") private var autoFinishAfterMinutes = 30
     @AppStorage("hud.visible") private var hudVisible = true
     @AppStorage("userName") private var userName = ""
     @AppStorage("personalNote") private var personalNote = ""
@@ -135,6 +136,22 @@ struct SettingsPaneView: View {
                     ForEach([2, 3, 5, 10, 15], id: \.self) { Text("\($0)m").tag($0) }
                 }
                 .accessibilityIdentifier("settings.idleThreshold")
+                .labelsHidden()
+                .frame(width: 110)
+            }
+
+            Divider()
+
+            row("Finish a forgotten session",
+                detail: "Walk away for this long and the session is finished for you, back where you stopped — so one left running overnight cannot bank the whole night.") {
+                Picker("", selection: $autoFinishAfterMinutes) {
+                    Text("15m").tag(15)
+                    Text("30m").tag(30)
+                    Text("1h").tag(60)
+                    Text("2h").tag(120)
+                    Text("Never").tag(0)
+                }
+                .accessibilityIdentifier("settings.autoFinish")
                 .labelsHidden()
                 .frame(width: 110)
             }

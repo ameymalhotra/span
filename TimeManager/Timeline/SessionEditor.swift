@@ -13,6 +13,9 @@ struct SessionEditor: View {
     let onClose: () -> Void
 
     @State private var isConfirmingDelete = false
+    /// What is in the real-work field. Held apart from the stored number so a
+    /// half-typed or emptied entry is not snapped to something else.
+    @State private var honestDraft = ""
 
     private var isRunning: Bool { session.status != .completed }
 
@@ -105,6 +108,7 @@ struct SessionEditor: View {
                 if let first = session.segments.min(by: { $0.startedAt < $1.startedAt }) {
                     first.startedAt = moment
                 }
+                session.clampReviewToWorkedTime()
                 save()
             }
         )
@@ -119,6 +123,9 @@ struct SessionEditor: View {
                 let last = session.segments
                     .max { ($0.endedAt ?? $0.startedAt) < ($1.endedAt ?? $1.startedAt) }
                 last?.endedAt = end
+                // The review answered a longer session; it cannot claim more
+                // real work than the session now holds.
+                session.clampReviewToWorkedTime()
                 save()
             }
         )
@@ -145,6 +152,31 @@ struct SessionEditor: View {
             .labelsHidden()
             .pickerStyle(.segmented)
             .frame(width: 170)
+        }
+
+        // The review's own question, editable here for the same reason the
+        // rating is: a session whose times were corrected has an answer that no
+        // longer fits it, and the sheet that asked is long gone.
+        if !isRunning {
+            HStack {
+                Text("Real work")
+                Spacer()
+                TextField("Minutes", text: $honestDraft, prompt: Text("Not set"))
+                    .accessibilityIdentifier("editor.honestMinutes")
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                    .onChange(of: honestDraft) { _, new in commitHonestMinutes(new) }
+                Stepper("", value: Binding(
+                    get: { session.honestWorkMinutes ?? session.workedMinutes() },
+                    set: { setHonestMinutes($0) }
+                ), in: 0...max(1, session.workedMinutes()))
+                .labelsHidden()
+                Text("of \(session.workedMinutes())m")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .monospacedDigit()
+            }
+            .onAppear { honestDraft = session.honestWorkMinutes.map(String.init) ?? "" }
         }
 
         HStack {
@@ -185,6 +217,27 @@ struct SessionEditor: View {
             Button("Done", action: commit)
                 .keyboardShortcut(.defaultAction)
         }
+    }
+
+    private func commitHonestMinutes(_ text: String) {
+        let digits = text.filter(\.isNumber)
+        if digits != text { honestDraft = digits; return }
+        guard let value = Int(digits) else {
+            session.honestWorkMinutes = nil
+            save()
+            return
+        }
+        let clamped = min(max(value, 0), session.workedMinutes())
+        session.honestWorkMinutes = clamped
+        if clamped != value { honestDraft = "\(clamped)" }
+        save()
+    }
+
+    private func setHonestMinutes(_ value: Int) {
+        let clamped = min(max(value, 0), session.workedMinutes())
+        session.honestWorkMinutes = clamped
+        honestDraft = "\(clamped)"
+        save()
     }
 
     private func delete() {

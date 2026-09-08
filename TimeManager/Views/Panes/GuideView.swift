@@ -58,6 +58,8 @@ struct GuideView: View {
             para("Start one from the Focus pane or the toolbar. Give it a name, a category and a length — 30 minutes, an hour, 90 minutes, two hours, or anything you type in. The ring counts down and the menu bar shows the same number.")
             para("Pausing a session stops the clock. That matters for the arithmetic: a session records each stretch you actually worked, so a 60-minute session paused for 15 counts as 45 minutes of focus, not 60. Those stretches are also what the timeline draws, which is why a session you broke off appears as two blocks with a gap.")
             note("Pauses shorter than ten minutes are drawn as one block. Below that, a gap is noise rather than a break.")
+            para("Breaks have a timer of their own. Five, ten or fifteen minutes from the Focus pane, or any length you type, and Span sounds the end of it the way it sounds the end of a session. Starting a break pauses whatever session is running — a break counted as work would defeat the point — and coming back starts it again. Finish a session and you are asked whether you want one.")
+            para("You do not have to remember to press Finish. Walk away for longer than the grace period in Settings — half an hour to begin with — and the session is finished where you stopped, not where you came back, so one left running overnight ends at last night's last keystroke rather than banking sixteen hours. Set it to Never if you would rather close every session yourself.")
         }
     }
 
@@ -79,6 +81,7 @@ struct GuideView: View {
             bullet("Open a block to set exact start and end times, so you are never stuck with wherever the drag landed.")
             bullet("Finished sessions resize the same way. If you kept working past the end of one, pull its bottom edge down rather than logging a second block.")
             bullet("⌘B adds a block at the current time without dragging.")
+            bullet("A block counts towards the day's focus and your daily target, the same as a session — it is time you are vouching for. Only the part that has already happened counts, so a block drawn across the afternoon fills in as the afternoon passes.")
             note("A block is a plan, not a running clock. Draw one across the present and the Focus pane shows it counting down, with a button to start tracking it — which counts the time already inside the block and runs to its end.")
             GuideDiagram.dragToCreate
         }

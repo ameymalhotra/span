@@ -50,11 +50,39 @@ final class AppModel {
     /// than dropping the review on the floor.
     var pendingReflection: WorkSession?
 
+    /// Whether `pendingReflection` was ended by Span rather than by the user,
+    /// so the sheet can say why a session the user never finished is over.
+    private(set) var pendingReflectionWasAutomatic = false
+
+    /// Set when a session the user finished themselves is owed the offer of a
+    /// break, once its review has been dealt with. A session Span closed on its
+    /// own sets nothing: whoever left it running is not sitting there waiting
+    /// to be told to rest.
+    var offersBreakAfterReview = false
+
+    /// When the running break ends, if one is running.
+    private(set) var breakEndsAt: Date?
+    /// Pre-formatted, for the same reason as `sessionClock`.
+    private(set) var breakClock: String = "00:00"
+    /// How long the running break was set for, so its ring has a whole to be a
+    /// fraction of.
+    private(set) var breakLength: TimeInterval = 0
+    /// Whether this break paused a session on its way in, so ending it early
+    /// can put the user back to work rather than leaving a session paused for
+    /// them to notice later — and so the pane can say as much.
+    private(set) var sessionPausedForBreak = false
+
+    var isOnBreak: Bool { breakEndsAt != nil }
+
     // Pre-formatted so a tick that doesn't change the displayed text doesn't
     // invalidate any view. Publishing a `Date` would re-render every second
     // regardless of whether anything visibly moved.
     private(set) var sessionClock: String = "00:00"
     private(set) var focusTodayText: String = "0m"
+    /// The number behind `focusTodayText`, for the Focus pane's ring. Published
+    /// rather than recomputed there: the ring and the status bar are the same
+    /// claim about the same day and must not be able to disagree.
+    private(set) var focusToday: TimeInterval = 0
     private(set) var sinceBreakText: String = "--"
     private(set) var percentOfTargetText: String = "0%"
 
@@ -73,6 +101,17 @@ final class AppModel {
     /// Daily focus goal in minutes, used for the HUD's third stat.
     @ObservationIgnored
     @AppStorage("dailyFocusTargetMinutes") var dailyFocusTargetMinutes: Int = 300
+
+    /// How long a session may go untouched before Span finishes it itself.
+    /// Zero turns that off and puts the session back in the user's hands.
+    @ObservationIgnored
+    @AppStorage("autoFinishAfterMinutes") var autoFinishAfterMinutes: Int = 30
+
+    /// How long the user has been away from the keyboard and mouse. Injected
+    /// so tests can drive the abandonment check without the machine they run
+    /// on deciding the answer.
+    @ObservationIgnored
+    var idleClock: () -> TimeInterval = { IdleMonitor.idleInterval() }
 
     private let context: ModelContext
     private var loop: Task<Void, Never>?
@@ -103,6 +142,9 @@ final class AppModel {
 
     func start() {
         ModelStack.recoverStaleSessions(in: context)
+        // After recovery, so a session closed just above is measured at the
+        // length it is finally recorded with.
+        ModelStack.clampReviewsToWorkedTime(in: context)
         refreshActiveSession()
         tracker.start()
         retune()
@@ -149,6 +191,7 @@ final class AppModel {
             NotificationService.cancelReminder(for: session)
         }
         activeSession = nil
+        clearBreak(resumingWork: false)
         ModelStack.resetEverything(in: context)
         tracker.isPaused = wasPaused
         refreshStats()
@@ -168,6 +211,10 @@ final class AppModel {
     func startSession(title: String, category: String, minutes: Int) -> WorkSession? {
         if activeSession == nil { refreshActiveSession() }
         guard activeSession == nil else { return nil }
+
+        // Starting work ends any break: the break's whole claim is that you
+        // are not working, and it must not resume a session on its way out.
+        clearBreak(resumingWork: false)
 
         let session = WorkSession(title: title, category: category, plannedMinutes: minutes)
         session.beginSegment()
@@ -189,6 +236,7 @@ final class AppModel {
     /// twice in every total.
     func startSession(from entry: TimeEntry) {
         guard activeSession == nil else { return }
+        clearBreak(resumingWork: false)
         let title = entry.title.trimmingCharacters(in: .whitespaces)
         let session = WorkSession(
             title: title.isEmpty ? "Untitled session" : title,
@@ -232,15 +280,57 @@ final class AppModel {
     /// which quietly skipped the review and left the session counted as
     /// finished but unreviewed for good.
     @discardableResult
-    func finishSession() -> WorkSession? {
+    func finishSession(at date: Date = .now, automatically: Bool = false) -> WorkSession? {
         guard let session = activeSession else { return nil }
         NotificationService.cancelReminder(for: session)
-        session.complete()
+        session.complete(at: date)
         save()
         activeSession = nil
         pendingReflection = session
+        pendingReflectionWasAutomatic = automatically
+        offersBreakAfterReview = !automatically && !isOnBreak
         refreshStats()
         return session
+    }
+
+    /// How long a session may sit untouched before it is finished for the
+    /// user, or nil when they have turned that off.
+    private var abandonmentGrace: TimeInterval? {
+        guard autoFinishAfterMinutes > 0 else { return nil }
+        return TimeInterval(autoFinishAfterMinutes * 60)
+    }
+
+    /// Ends a session the user has walked away from, at the moment they walked
+    /// away rather than the moment we noticed.
+    ///
+    /// A session used to run until someone pressed Finish. Forget once at the
+    /// end of an evening and the next morning's Finish banked the whole night:
+    /// a thousand minutes of focus in the day's totals, and a review sheet
+    /// asking how much of sixteen hours felt like real work.
+    ///
+    /// The idle clock is the system's own, the same one the tracker reads to
+    /// decide you are away, and it keeps running while the Mac sleeps — so a
+    /// laptop closed at 23:10 reports the whole night on waking and the
+    /// session is closed back at 23:10.
+    ///
+    /// The end is never pulled back before the session started, so a session
+    /// begun while the user was already away is measured from its own start
+    /// rather than from input that predates it.
+    @discardableResult
+    func autoFinishIfAbandoned(at now: Date = .now, idleFor idle: TimeInterval) -> WorkSession? {
+        guard let session = activeSession, let grace = abandonmentGrace else { return nil }
+
+        // A paused session is not over-counting — its clock stopped when it was
+        // paused — but until it is closed no new session can be started, so one
+        // left paused overnight goes the same way, ending where it paused.
+        let lastKnownGood: Date = switch session.status {
+        case .paused: session.pausedAt ?? session.startedAt
+        default: now.addingTimeInterval(-max(0, idle))
+        }
+
+        let end = max(session.startedAt, min(lastKnownGood, now))
+        guard now.timeIntervalSince(end) >= grace else { return nil }
+        return finishSession(at: end, automatically: true)
     }
 
     func extendSession(byMinutes minutes: Int) {
@@ -248,6 +338,60 @@ final class AppModel {
         activeSession.plannedMinutes += minutes
         save()
         NotificationService.scheduleEndReminder(for: activeSession)
+    }
+
+    // MARK: - Breaks
+
+    /// How long is left of the break, or zero when none is running.
+    func breakRemaining(at date: Date = .now) -> TimeInterval {
+        guard let breakEndsAt else { return 0 }
+        return max(0, breakEndsAt.timeIntervalSince(date))
+    }
+
+    /// Starts a break, pausing a running session for its duration.
+    ///
+    /// The pause is the point: a break taken with the session still counting
+    /// would be recorded as work, which is exactly the arithmetic the rest of
+    /// the app goes to some trouble to avoid.
+    func startBreak(minutes: Int, at date: Date = .now) {
+        offersBreakAfterReview = false
+        if activeSession?.status == .active {
+            pauseSession()
+            sessionPausedForBreak = true
+        }
+        let length = TimeInterval(max(1, minutes) * 60)
+        let end = date.addingTimeInterval(length)
+        breakEndsAt = end
+        breakLength = length
+        NotificationService.scheduleBreakEnd(at: end)
+        refreshStats()
+    }
+
+    func extendBreak(byMinutes minutes: Int) {
+        guard let breakEndsAt else { return }
+        let end = breakEndsAt.addingTimeInterval(TimeInterval(minutes * 60))
+        self.breakEndsAt = end
+        breakLength += TimeInterval(minutes * 60)
+        NotificationService.scheduleBreakEnd(at: end)
+        refreshStats()
+    }
+
+    /// Ends the break. Coming back deliberately resumes the session the break
+    /// paused; a break that simply ran out leaves it paused, since nobody has
+    /// said they are back at the desk.
+    func endBreak(resumingWork: Bool = true) {
+        guard isOnBreak else { return }
+        clearBreak(resumingWork: resumingWork)
+        refreshStats()
+    }
+
+    private func clearBreak(resumingWork: Bool) {
+        breakEndsAt = nil
+        breakLength = 0
+        NotificationService.cancelBreakEnd()
+        let shouldResume = sessionPausedForBreak && resumingWork
+        sessionPausedForBreak = false
+        if shouldResume, activeSession?.status == .paused { resumeSession() }
     }
 
     /// Adds a hand-made block on `day`: at the current time when that is today,
@@ -305,7 +449,13 @@ final class AppModel {
         let dayStart = calendar.startOfDay(for: now)
 
         followClockPastMidnight(to: dayStart, calendar: calendar)
+        // Before anything is measured: a session the user left hours ago must
+        // not spend this tick counting, nor be announced as ending.
+        autoFinishIfAbandoned(at: now, idleFor: idleClock())
         NotificationService.announceEndIfDue(for: activeSession, at: now)
+
+        finishBreakIfDue(at: now)
+        breakClock = Format.clock(breakRemaining(at: now))
 
         if let session = activeSession {
             let remaining = session.remaining(at: now)
@@ -325,8 +475,19 @@ final class AppModel {
         let sessions = (try? context.fetch(FetchDescriptor<WorkSession>(
             predicate: #Predicate { $0.startedAt >= windowStart }
         ))) ?? []
+        // Blocks the user drew by hand count too. They are the record of work
+        // that happened away from the Mac, or earlier in the day than the app
+        // was told about — leaving them out meant adding an hour you really
+        // worked moved the timeline and nothing else, least of all the goal it
+        // was meant to count towards. The range ends at now, so a block drawn
+        // across the afternoon still only counts the part that has happened.
+        let entries = (try? context.fetch(FetchDescriptor<TimeEntry>(
+            predicate: #Predicate { $0.startedAt >= windowStart }
+        ))) ?? []
         let today = dayStart...max(dayStart, now)
         let focus = sessions.reduce(0) { $0 + $1.elapsed(in: today, at: now) }
+            + entries.reduce(0) { $0 + $1.duration(in: today) }
+        focusToday = focus
         focusTodayText = Format.compact(focus)
 
         let target = TimeInterval(max(1, dailyFocusTargetMinutes) * 60)
@@ -348,6 +509,15 @@ final class AppModel {
             // both reads as a countdown and overflows the pill.
             sinceBreakText = reference.map { Format.compact(now.timeIntervalSince($0)) } ?? "—"
         }
+    }
+
+    /// Backstop for the armed timer, for a Mac that slept through the end of a
+    /// break — the same arrangement the session chime has. Internal so tests can
+    /// drive it without waiting out a real break.
+    func finishBreakIfDue(at date: Date) {
+        guard let end = breakEndsAt, date >= end else { return }
+        NotificationService.announceBreakEnd(at: end)
+        clearBreak(resumingWork: false)
     }
 
     private func save() {

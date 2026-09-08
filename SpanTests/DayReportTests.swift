@@ -84,6 +84,33 @@ struct DayReportTests {
         #expect(report(activity: [working]).dayFraction == 0.25)
     }
 
+    @Test("a block drawn by hand counts towards the day's focus")
+    func focusedTimeCountsEntries() {
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 9), to: Clock.at(hour: 11))
+        #expect(report(entries: [entry]).focusedTime == Clock.hours(2))
+    }
+
+    @Test("a block that has not happened yet is not counted as focus")
+    func focusedTimeIgnoresBlocksStillToCome() {
+        // `now` is six in the evening; this one starts at eight.
+        let planned = Fixture.entry(in: context, from: Clock.at(hour: 20), to: Clock.at(hour: 21))
+        #expect(report(entries: [planned]).focusedTime == 0)
+    }
+
+    @Test("a block drawn across now counts only the part that has happened")
+    func focusedTimeCountsTheElapsedPartOfABlock() {
+        let across = Fixture.entry(in: context, from: Clock.at(hour: 17), to: Clock.at(hour: 19))
+        #expect(report(entries: [across]).focusedTime == Clock.hours(1))
+    }
+
+    @Test("sessions and blocks add up together")
+    func focusedTimeSumsBothSources() {
+        let session = Fixture.session(in: context, status: .completed,
+                                      segments: [(Clock.at(hour: 9), Clock.at(hour: 10))])
+        let entry = Fixture.entry(in: context, from: Clock.at(hour: 11), to: Clock.at(hour: 12))
+        #expect(report(sessions: [session], entries: [entry]).focusedTime == Clock.hours(2))
+    }
+
     // MARK: - Honest work and reviews
 
     @Test("honest work counts only what the user said was real work")
@@ -95,6 +122,23 @@ struct DayReportTests {
         let report = report(sessions: [reviewed])
         #expect(report.focusedTime == 7200)
         #expect(report.honestWorkTime == 4500)
+    }
+
+    @Test("a review left behind by a shortened session cannot inflate the day")
+    func honestWorkCannotExceedTheSessionItDescribes() {
+        // The session that started this: reviewed after running all night, then
+        // corrected to the two hours actually worked. The day used to go on
+        // reporting nineteen hours of honest work inside two hours of focus.
+        let corrected = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 19), Clock.at(hour: 21))],
+            focusRating: 3, honestWorkMinutes: 1143, reflectionState: .completed)
+        let report = report(sessions: [corrected])
+        #expect(report.focusedTime == Clock.hours(2))
+        #expect(report.honestWorkTime == Clock.hours(2))
+
+        let split = DayReport.honestySplit(of: [corrected])
+        #expect(split.honest == Clock.hours(2))
     }
 
     @Test("an unreviewed session contributes no honest work but is not counted as reviewed")

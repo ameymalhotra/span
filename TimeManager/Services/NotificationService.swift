@@ -120,6 +120,59 @@ enum NotificationService {
         announceEnd(of: session)
     }
 
+    // MARK: - Breaks
+
+    /// The scheduled banner for a break's end. A break can be running while a
+    /// session sits paused, so its alert is kept entirely apart from the
+    /// session's — cancelling one must never silence the other.
+    static let breakIdentifier = "span.break"
+
+    @MainActor private static var breakChime: Task<Void, Never>?
+    /// The break end already sounded, so the timer and the tick backstop cannot
+    /// announce the same one twice.
+    @MainActor private static var announcedBreakEnd: Date?
+
+    @MainActor
+    static func scheduleBreakEnd(at date: Date) {
+        breakChime?.cancel()
+        announcedBreakEnd = nil
+
+        breakChime = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(max(0.25, date.timeIntervalSinceNow)))
+            guard !Task.isCancelled else { return }
+            announceBreakEnd(at: date)
+        }
+
+        guard !isTesting else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Break's over"
+        content.body = "Back to it whenever you're ready."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(1, date.timeIntervalSinceNow), repeats: false)
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: breakIdentifier, content: content, trigger: trigger))
+    }
+
+    @MainActor
+    static func cancelBreakEnd() {
+        breakChime?.cancel()
+        breakChime = nil
+        guard !isTesting else { return }
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [breakIdentifier])
+    }
+
+    /// Sounds the end of a break, once per break.
+    @MainActor
+    static func announceBreakEnd(at end: Date) {
+        guard announcedBreakEnd != end else { return }
+        announcedBreakEnd = end
+        guard !isTesting else { return }
+        if isSoundEnabled { NSSound(named: "Glass")?.play() }
+        NSApp?.requestUserAttention(.informationalRequest)
+    }
+
     @MainActor
     static func announceEnd(of session: WorkSession) {
         guard session.status == .active, chimedSession != session.id else { return }

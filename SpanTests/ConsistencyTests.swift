@@ -112,7 +112,11 @@ struct ConsistencyTests {
         // nowhere to present a sheet, so the session is queued on the model and
         // the main window picks it up — rather than the review being dropped.
         let model = AppModel(container: container)
-        model.startSession(title: "Write", category: "Deep Work", minutes: 30)
+        let started = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 30))
+        // Backdated so the session has half an hour behind it: an answer of
+        // twenty minutes has to fit inside the session it describes.
+        started.startedAt = Date.now.addingTimeInterval(-Clock.minutes(30))
+        started.segments.first?.startedAt = started.startedAt
 
         let finished = try #require(model.finishSession())
         #expect(model.pendingReflection?.id == finished.id,

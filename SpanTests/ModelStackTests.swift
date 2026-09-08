@@ -16,6 +16,48 @@ struct ModelStackTests {
         try context.fetch(FetchDescriptor<WorkSession>())
     }
 
+    // MARK: - clampReviewsToWorkedTime
+
+    @Test("a review answer larger than its session is written back down at launch")
+    func staleReviewIsClampedAtLaunch() {
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 19), Clock.at(hour: 21))],
+            focusRating: 3, honestWorkMinutes: 1143, reflectionState: .completed)
+
+        ModelStack.clampReviewsToWorkedTime(in: context, now: Clock.at(hour: 22))
+
+        #expect(session.honestWorkMinutes == 120)
+    }
+
+    @Test("answers that fit their sessions are left as the user wrote them")
+    func goodReviewsAreUntouched() {
+        let session = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 9), Clock.at(hour: 11))],
+            focusRating: 4, honestWorkMinutes: 75, reflectionState: .completed)
+        let unanswered = Fixture.session(
+            in: context, status: .completed,
+            segments: [(Clock.at(hour: 12), Clock.at(hour: 13))])
+
+        ModelStack.clampReviewsToWorkedTime(in: context, now: Clock.at(hour: 22))
+
+        #expect(session.honestWorkMinutes == 75)
+        #expect(unanswered.honestWorkMinutes == nil)
+    }
+
+    @Test("a running session's answer is left alone, its clock still moving")
+    func runningSessionsAreNotClamped() {
+        let session = Fixture.session(
+            in: context, startedAt: Clock.at(hour: 21), status: .active,
+            segments: [(Clock.at(hour: 21), nil)],
+            focusRating: 3, honestWorkMinutes: 90, reflectionState: .completed)
+
+        ModelStack.clampReviewsToWorkedTime(in: context, now: Clock.at(hour: 21.5))
+
+        #expect(session.honestWorkMinutes == 90)
+    }
+
     // MARK: - recoverStaleSessions
 
     @Test("a session left running overnight is closed at its last known good moment")
