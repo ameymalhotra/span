@@ -10,14 +10,26 @@ struct SessionEditor: View {
     @Environment(\.modelContext) private var context
 
     @Bindable var session: WorkSession
+    /// Handed in rather than read from the environment. The editor is always
+    /// presented in a sheet, and setting an end that has not happened yet has
+    /// to reach the one model every surface shares — a session that quietly
+    /// failed to start again would look exactly like the bug this fixes.
+    let model: AppModel
     let onClose: () -> Void
 
     @State private var isConfirmingDelete = false
     /// What is in the real-work field. Held apart from the stored number so a
     /// half-typed or emptied entry is not snapped to something else.
     @State private var honestDraft = ""
+    /// A running session's new planned length, held until Done. Applied as it
+    /// was typed, deleting "50" to write "40" passed through 5 and 4 — shorter
+    /// than the time already worked — and the clock ended the session before
+    /// the user had finished typing. Nil until the picker is touched.
+    @State private var plannedDraft: Int?
 
     private var isRunning: Bool { session.status != .completed }
+
+    private var plannedMinutes: Int { plannedDraft ?? session.plannedMinutes }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -75,15 +87,14 @@ struct SessionEditor: View {
             HStack {
                 Text("Planned")
                 Spacer()
-                Text(Format.compact(session.plannedDuration))
+                Text(Format.compact(TimeInterval(plannedMinutes * 60)))
                     .foregroundStyle(Theme.secondaryLabel)
                     .monospacedDigit()
             }
-            DurationPicker(minutes: $session.plannedMinutes, showsSummary: false)
-                .onChange(of: session.plannedMinutes) { _, _ in
-                    NotificationService.scheduleEndReminder(for: session)
-                    save()
-                }
+            DurationPicker(minutes: Binding(
+                get: { plannedMinutes },
+                set: { plannedDraft = $0 }
+            ), showsSummary: false)
         } else {
             DatePicker("Ended", selection: endBinding, displayedComponents: [.hourAndMinute])
         }
@@ -119,10 +130,14 @@ struct SessionEditor: View {
             get: { session.endedAt ?? .now },
             set: { moment in
                 let end = max(moment, session.startedAt.addingTimeInterval(60))
-                session.endedAt = end
+                // An end that has not happened yet means the work has not
+                // either: the session goes back to running rather than sitting
+                // finished with time to come. The panel redraws as Running.
+                if model.resumeSession(session, endingAt: end) { return }
+                session.endedAt = min(end, .now)
                 let last = session.segments
                     .max { ($0.endedAt ?? $0.startedAt) < ($1.endedAt ?? $1.startedAt) }
-                last?.endedAt = end
+                last?.endedAt = session.endedAt
                 // The review answered a longer session; it cannot claim more
                 // real work than the session now holds.
                 session.clampReviewToWorkedTime()
@@ -250,6 +265,9 @@ struct SessionEditor: View {
     private func commit() {
         if session.title.trimmingCharacters(in: .whitespaces).isEmpty {
             session.title = "Untitled session"
+        }
+        if isRunning, let minutes = plannedDraft, minutes != session.plannedMinutes {
+            model.setPlannedMinutes(minutes, for: session)
         }
         save()
         onClose()

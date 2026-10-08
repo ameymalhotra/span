@@ -4,6 +4,10 @@ import SwiftUI
 struct CardBlockView: View {
     let block: TimelineBlock
     let height: CGFloat
+    /// Off while the card is being dragged. A tooltip is an AppKit tracking
+    /// rect, re-registered every time the view updates, and nobody is hovering
+    /// a card they are holding onto.
+    var showsTooltip = true
 
     /// Text is disclosed by available height rather than truncated into an
     /// unreadable sliver.
@@ -46,7 +50,7 @@ struct CardBlockView: View {
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.block))
         .overlay(border)
-        .help(tooltip)
+        .help(showsTooltip ? tooltip : "")
     }
 
     @ViewBuilder private var background: some View {
@@ -144,6 +148,7 @@ struct TimelineBlockDetail: View {
         switch block.kind {
         case .session: "Session"
         case .entry: "Entry"
+        case .rest: "Break"
         case .activity: "Tracked"
         case .idle: "Away"
         }

@@ -199,6 +199,18 @@ struct AppModelTests {
         #expect(model.activeSession == nil)
     }
 
+    @Test("a paused session can still be lengthened")
+    func extendWhilePaused() throws {
+        // The menu bar, the HUD and the Focus pane all offer this while a
+        // session is paused — mid-break included.
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 30))
+        model.pauseSession()
+        model.extendSession(byMinutes: 5)
+
+        #expect(session.plannedMinutes == 35)
+        #expect(session.status == .paused, "extending must not restart the clock")
+    }
+
     @Test("an extension is saved")
     func extendPersists() throws {
         model.startSession(title: "Write", category: "Deep Work", minutes: 45)
@@ -455,6 +467,87 @@ struct AppModelTests {
         #expect(model.selectedDate == Calendar.current.startOfDay(for: Date.now))
     }
 
+    // MARK: - Working past the end of a finished session
+
+    /// A finished session, ended a few minutes ago, the way one looks after
+    /// Finish has been pressed.
+    private func finishedSession(startedAgo: TimeInterval, endedAgo: TimeInterval) throws -> WorkSession {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "SCALE-R", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-startedAgo))
+        _ = model.finishSession(at: now.addingTimeInterval(-endedAgo))
+        return session
+    }
+
+    @Test("pulling a finished session past now puts it back to work")
+    func draggingAFinishedSessionIntoTheFutureResumesIt() throws {
+        let now = Date.now
+        let session = try finishedSession(startedAgo: Clock.minutes(40), endedAgo: Clock.minutes(10))
+
+        let resumed = model.resumeSession(session, endingAt: now.addingTimeInterval(Clock.minutes(20)), at: now)
+
+        #expect(resumed)
+        #expect(session.status == .active)
+        #expect(session.endedAt == nil)
+        #expect(session.openSegment != nil, "the timer has nothing to count")
+        #expect(model.activeSession?.id == session.id)
+        // The countdown runs to where the edge was put, give or take the
+        // rounding to whole planned minutes.
+        #expect(abs(session.remaining(at: now) - Clock.minutes(20)) < 60)
+    }
+
+    @Test("the run that was reopened is the one that was there, not a new one")
+    func resumingReopensTheLastRun() throws {
+        let now = Date.now
+        let session = try finishedSession(startedAgo: Clock.minutes(40), endedAgo: Clock.minutes(10))
+        let runs = session.segments.count
+
+        model.resumeSession(session, endingAt: now.addingTimeInterval(Clock.minutes(20)), at: now)
+
+        #expect(session.segments.count == runs, "a second run would draw a gap across the work")
+        #expect(session.segments.filter { $0.endedAt == nil }.count == 1)
+        // The stretch since it was finished counts as worked, which is what
+        // dragging the block over the present says.
+        #expect(abs(session.elapsed(at: now) - Clock.minutes(40)) < 2)
+    }
+
+    @Test("an end still in the past leaves the session finished")
+    func anEndInThePastDoesNotResume() throws {
+        let now = Date.now
+        let session = try finishedSession(startedAgo: Clock.minutes(40), endedAgo: Clock.minutes(10))
+
+        let resumed = model.resumeSession(session, endingAt: now.addingTimeInterval(-Clock.minutes(5)), at: now)
+
+        #expect(!resumed)
+        #expect(session.status == .completed)
+        #expect(model.activeSession == nil)
+    }
+
+    @Test("a finished session is not resumed on top of a running one")
+    func resumingIsRefusedWhileAnotherSessionRuns() throws {
+        let now = Date.now
+        let finished = try finishedSession(startedAgo: Clock.minutes(40), endedAgo: Clock.minutes(10))
+        let running = try #require(model.startSession(title: "Something else", category: "Admin", minutes: 30))
+
+        let resumed = model.resumeSession(finished, endingAt: now.addingTimeInterval(Clock.minutes(20)), at: now)
+
+        #expect(!resumed)
+        #expect(finished.status == .completed)
+        #expect(model.activeSession?.id == running.id)
+    }
+
+    @Test("resuming ends a break rather than leaving both running")
+    func resumingEndsABreak() throws {
+        let now = Date.now
+        let session = try finishedSession(startedAgo: Clock.minutes(40), endedAgo: Clock.minutes(10))
+        model.startBreak(minutes: 10)
+
+        model.resumeSession(session, endingAt: now.addingTimeInterval(Clock.minutes(20)), at: now)
+
+        #expect(!model.isOnBreak)
+        #expect(session.status == .active)
+    }
+
     // MARK: - Breaks
 
     @Test("a break pauses the session it interrupts")
@@ -525,13 +618,69 @@ struct AppModelTests {
         #expect(model.offersBreakAfterReview)
 
         model.offersBreakAfterReview = false
-        try withGrace(minutes: 30) {
+        try withGrace(minutes: 30) {  // the abandoned case offers nothing
             let now = Date.now
             let session = try #require(model.startSession(title: "Evening", category: "Deep Work", minutes: 60))
             backdate(session, to: now.addingTimeInterval(-Clock.hours(10)))
             model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9))
             #expect(!model.offersBreakAfterReview, "nobody abandoned a session waiting to be told to rest")
         }
+    }
+
+    @Test("a break is written down so the timeline can draw it")
+    func aBreakIsRecorded() throws {
+        let now = Date.now
+        model.startBreak(minutes: 10, at: now)
+
+        let running = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
+        #expect(running.endedAt == nil)
+        #expect(running.end == now.addingTimeInterval(Clock.minutes(10)))
+
+        model.extendBreak(byMinutes: 5)
+        #expect(running.end == now.addingTimeInterval(Clock.minutes(15)), "the timeline would stop short of the break")
+
+        model.endBreak()
+        let ended = try #require(running.endedAt)
+        #expect(ended < now.addingTimeInterval(Clock.minutes(1)), "coming back early ends the break where it was ended")
+        #expect(TimelineBlock.block(for: running).kind == .rest)
+    }
+
+    @Test("a break that runs out is recorded to its end, not to when it was noticed")
+    func aBreakRunningOutIsRecordedToItsEnd() throws {
+        let now = Date.now
+        model.startBreak(minutes: 5, at: now)
+        model.finishBreakIfDue(at: now.addingTimeInterval(Clock.hours(2)))
+
+        let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
+        #expect(record.endedAt == now.addingTimeInterval(Clock.minutes(5)))
+    }
+
+    @Test("a break running when the app quit is closed on the next launch")
+    func anOpenBreakIsClosedOnLaunch() throws {
+        let now = Date.now
+        let record = BreakRecord(startedAt: now.addingTimeInterval(-Clock.hours(3)),
+                                 plannedEnd: now.addingTimeInterval(-Clock.hours(3) + Clock.minutes(10)))
+        context.insert(record)
+
+        ModelStack.closeOpenBreaks(in: context, now: now)
+
+        #expect(record.endedAt == record.plannedEnd)
+    }
+
+    @Test("dragging a running break's end lengthens it, and keeps a minute on the clock")
+    func aRunningBreakCanBeDraggedLonger() throws {
+        let now = Date.now
+        model.startBreak(minutes: 10, at: now)
+        let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
+        #expect(model.isRunningBreak(record))
+
+        model.setBreakEnd(now.addingTimeInterval(Clock.minutes(25)), now: now)
+        #expect(model.breakLength == Clock.minutes(25))
+        #expect(record.plannedEnd == now.addingTimeInterval(Clock.minutes(25)))
+
+        model.setBreakEnd(now.addingTimeInterval(-Clock.minutes(5)), now: now)
+        #expect(model.isOnBreak, "dragging the end up past now ended the break under the cursor")
+        #expect(model.breakRemaining(at: now) == 60)
     }
 
     @Test("ending a break nobody started is harmless")
@@ -645,17 +794,145 @@ struct AppModelTests {
 
             let finished = try #require(model.autoFinishIfAbandoned(at: now, idleFor: Clock.hours(9)))
             #expect(model.pendingReflection?.id == finished.id)
-            #expect(model.pendingReflectionWasAutomatic)
+            #expect(model.pendingReflectionEnding == .abandoned)
             #expect(finished.needsReflection)
         }
     }
 
-    @Test("a session the user finishes is not reported as automatic")
+    @Test("a session the user finishes is recorded as their own doing")
     func aManualFinishIsNotFlagged() throws {
         model.startSession(title: "Write", category: "Deep Work", minutes: 60)
         _ = model.finishSession()
         #expect(model.pendingReflection != nil)
-        #expect(!model.pendingReflectionWasAutomatic)
+        #expect(model.pendingReflectionEnding == .byHand)
+    }
+
+    // MARK: - Changing how long a session is meant to run
+
+    @Test("a running session cannot be planned shorter than it has already run")
+    func plannedLengthHasAFloorOfTheWorkDone() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(50)))
+
+        // Fifty minutes in, asking for forty.
+        model.setPlannedMinutes(40, for: session)
+
+        #expect(session.plannedMinutes == 50, "the session was planned into its own past")
+
+        // So it ends now, with everything it worked — not ten minutes ago,
+        // with ten minutes thrown away.
+        model.finishAtPlannedEndIfDue(at: now)
+        #expect(session.status == .completed)
+        #expect(abs(session.elapsed(at: now) - Clock.minutes(50)) < 60)
+    }
+
+    @Test("a length that fits is taken as asked")
+    func plannedLengthIsAppliedWhenItFits() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(20)))
+
+        model.setPlannedMinutes(40, for: session)
+
+        #expect(session.plannedMinutes == 40)
+        #expect(session.status == .active)
+        model.finishAtPlannedEndIfDue(at: now)
+        #expect(session.status == .active, "twenty minutes in, a forty-minute session has time left")
+    }
+
+    @Test("a planned length is capped at the picker's limit")
+    func plannedLengthIsCapped() throws {
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        model.setPlannedMinutes(10_000, for: session)
+        #expect(session.plannedMinutes == AppModel.plannedMinutesLimit)
+    }
+
+    // MARK: - Running out of time
+
+    @Test("a session that runs its planned time finishes itself, on the minute")
+    func aSessionEndsWhenItsTimeIsUp() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        // Started ninety minutes ago: half an hour past its hour, the way a
+        // session looks when nobody was watching the clock.
+        let started = now.addingTimeInterval(-Clock.minutes(90))
+        backdate(session, to: started)
+
+        model.finishAtPlannedEndIfDue(at: now)
+
+        #expect(session.status == .completed)
+        #expect(model.activeSession == nil)
+        #expect(abs((session.endedAt ?? now).timeIntervalSince(started.addingTimeInterval(Clock.hours(1)))) < 1,
+                "the session did not end where its hour ran out")
+        #expect(abs(session.elapsed(at: now) - Clock.hours(1)) < 1)
+        #expect(model.pendingReflectionEnding == .plannedEnd)
+        #expect(model.offersBreakAfterReview, "its time being up is exactly when a break is worth offering")
+    }
+
+    @Test("a session still inside its planned time is left running")
+    func aSessionWithTimeLeftIsNotEnded() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(50)))
+
+        model.finishAtPlannedEndIfDue(at: now)
+
+        #expect(session.status == .active)
+        #expect(model.activeSession?.id == session.id)
+    }
+
+    @Test("clicking Finish late does not buy the minutes since the time ran out")
+    func finishingLateRecordsThePlannedEnd() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        let started = now.addingTimeInterval(-Clock.minutes(65))
+        backdate(session, to: started)
+
+        // The user's own case: an hour's session due at seven, Finish pressed
+        // at five past.
+        _ = model.finishSession()
+
+        #expect(abs(session.elapsed(at: now) - Clock.hours(1)) < 1, "the overtime was banked as work")
+        #expect(abs((session.endedAt ?? now).timeIntervalSince(started.addingTimeInterval(Clock.hours(1)))) < 1)
+    }
+
+    @Test("finishing early is still recorded where the user finished")
+    func finishingEarlyIsNotStretched() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(20)))
+
+        _ = model.finishSession()
+
+        #expect(abs(session.elapsed(at: now) - Clock.minutes(20)) < 1)
+    }
+
+    @Test("extending before the end keeps the session running")
+    func extendingBeforeTheEndKeepsItAlive() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(59)))
+
+        model.extendSession(byMinutes: 5)
+        model.finishAtPlannedEndIfDue(at: now)
+
+        #expect(session.status == .active, "the five minutes just asked for were taken away again")
+        #expect(session.plannedMinutes == 65)
+    }
+
+    @Test("a session resumed with no time left is left in the overtime the user asked for")
+    func resumingIntoOvertimeIsNotCutShort() throws {
+        let now = Date.now
+        let session = try #require(model.startSession(title: "Write", category: "Deep Work", minutes: 60))
+        backdate(session, to: now.addingTimeInterval(-Clock.minutes(70)))
+        model.pauseSession()
+        model.resumeSession()
+
+        model.finishAtPlannedEndIfDue(at: now)
+
+        #expect(session.status == .active,
+                "pressing Resume on a used-up session must not end it on the spot")
     }
 }
 

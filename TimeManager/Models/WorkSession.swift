@@ -77,6 +77,31 @@ final class WorkSession {
         max(0, plannedDuration - elapsed(at: date))
     }
 
+    /// The moment this session's planned time runs out.
+    ///
+    /// Deliberately not "now plus whatever is left": once the time is up
+    /// `remaining` is zero and that answers "now", which is precisely the
+    /// overtime this exists to cut off. It is measured from where the current
+    /// run began, so a tick that arrives fifteen seconds late still ends the
+    /// session on the minute it was due.
+    ///
+    /// Nil when the session is not running, or when the run it is on began
+    /// with no planned time left — resuming a session that has already used
+    /// its hour is a deliberate overtime, and it is not for Span to cut that
+    /// short the instant the user presses Resume.
+    func plannedEnd(at date: Date = .now) -> Date? {
+        guard status == .active else { return nil }
+        guard let open = openSegment else {
+            // Legacy sessions, recorded before runs existed.
+            guard !segments.isEmpty || endedAt == nil else { return nil }
+            return startedAt.addingTimeInterval(totalPausedSeconds + plannedDuration)
+        }
+        let workedBefore = segments.reduce(0) { $0 + ($1.endedAt == nil ? 0 : $1.duration(at: date)) }
+        let left = plannedDuration - workedBefore
+        guard left > 0 else { return nil }
+        return open.startedAt.addingTimeInterval(left)
+    }
+
     /// Wall-clock span from first start to last stop, breaks included. This is
     /// the extent the session occupies on the day, as distinct from `elapsed`.
     func span(at date: Date = .now) -> ClosedRange<Date> {

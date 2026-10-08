@@ -38,6 +38,9 @@ struct MenuBarPanelView: View {
                         Button("Pause") { model.pauseSession() }
                             .accessibilityIdentifier("menuBar.pause")
                     }
+                    Button("+5m") { model.extendSession(byMinutes: 5) }
+                        .accessibilityIdentifier("menuBar.extend")
+                        .help("Add five minutes to the planned time")
                     Button("Finish") {
                         model.finishSession()
                         // The review sheet lives in the main window, which may

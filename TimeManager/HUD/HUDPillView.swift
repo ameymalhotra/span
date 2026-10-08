@@ -122,6 +122,8 @@ struct HUDPillView: View {
                 Button("Pause Session") { model.pauseSession() }
                     .accessibilityIdentifier("hud.pause")
             }
+            Button("Add 5 Minutes") { model.extendSession(byMinutes: 5) }
+                .accessibilityIdentifier("hud.extend")
             Button("Finish Session") {
                 model.finishSession()
                 // The review sheet lives in the main window.

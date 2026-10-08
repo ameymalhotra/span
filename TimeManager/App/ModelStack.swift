@@ -10,6 +10,7 @@ enum ModelStack {
         SessionSegment.self,
         ActivityRecord.self,
         TimeEntry.self,
+        BreakRecord.self,
         TimeCategory.self,
         AppCategoryRule.self,
     ])
@@ -124,6 +125,7 @@ enum ModelStack {
     static func resetEverything(in context: ModelContext) {
         try? context.delete(model: ActivityRecord.self)
         try? context.delete(model: TimeEntry.self)
+        try? context.delete(model: BreakRecord.self)
         try? context.delete(model: SessionSegment.self)
         try? context.delete(model: WorkSession.self)
         try? context.delete(model: AppCategoryRule.self)
@@ -204,6 +206,22 @@ enum ModelStack {
 
             session.complete(at: lastKnownGood)
             NotificationService.cancelReminder(for: session)
+        }
+        try? context.save()
+    }
+
+    /// Closes breaks that were running when the app quit.
+    ///
+    /// The running break's deadline is only held in memory, so after a relaunch
+    /// nothing is left to close one. Each is closed where it was due to end, or
+    /// now if that has not come yet — it is over either way, since nothing is
+    /// counting it down any more.
+    @MainActor
+    static func closeOpenBreaks(in context: ModelContext, now: Date = .now) {
+        let descriptor = FetchDescriptor<BreakRecord>(predicate: #Predicate { $0.endedAt == nil })
+        guard let open = try? context.fetch(descriptor), !open.isEmpty else { return }
+        for record in open {
+            record.endedAt = max(record.startedAt, min(now, record.plannedEnd))
         }
         try? context.save()
     }

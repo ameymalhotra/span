@@ -6,6 +6,7 @@ struct DayReviewView: View {
     let day: Date
 
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
     @State private var editing: WorkSession?
 
     @Query private var sessions: [WorkSession]
@@ -44,7 +45,7 @@ struct DayReviewView: View {
         }
         .background(Theme.canvas)
         .sheet(item: $editing) { session in
-            SessionEditor(session: session) { editing = nil }
+            SessionEditor(session: session, model: model) { editing = nil }
                 .padding(.vertical, Theme.Space.s)
         }
     }

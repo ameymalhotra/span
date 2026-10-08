@@ -58,6 +58,7 @@ struct GuideView: View {
             para("Start one from the Focus pane or the toolbar. Give it a name, a category and a length — 30 minutes, an hour, 90 minutes, two hours, or anything you type in. The ring counts down and the menu bar shows the same number.")
             para("Pausing a session stops the clock. That matters for the arithmetic: a session records each stretch you actually worked, so a 60-minute session paused for 15 counts as 45 minutes of focus, not 60. Those stretches are also what the timeline draws, which is why a session you broke off appears as two blocks with a gap.")
             note("Pauses shorter than ten minutes are drawn as one block. Below that, a gap is noise rather than a break.")
+            para("A session lasts the time you gave it. When that runs out Span sounds the end and finishes it there, at the minute it was due — pressing Finish ten minutes later does not add ten minutes to it. If you want longer, ask for it: add five minutes from the Focus pane, the menu bar or the HUD before the clock reaches zero, or pull the finished block's bottom edge past now afterwards, which starts it running again.")
             para("Breaks have a timer of their own. Five, ten or fifteen minutes from the Focus pane, or any length you type, and Span sounds the end of it the way it sounds the end of a session. Starting a break pauses whatever session is running — a break counted as work would defeat the point — and coming back starts it again. Finish a session and you are asked whether you want one.")
             para("You do not have to remember to press Finish. Walk away for longer than the grace period in Settings — half an hour to begin with — and the session is finished where you stopped, not where you came back, so one left running overnight ends at last night's last keystroke rather than banking sixteen hours. Set it to Never if you would rather close every session yourself.")
         }
@@ -77,6 +78,7 @@ struct GuideView: View {
     private var blocks: some View {
         card("Adding time by hand", "For work that happened away from the Mac, or that tracking got wrong.") {
             bullet("Drag anywhere on the timeline's wide lane to sweep out a block. It snaps to five minutes, and opens for naming as soon as you let go.")
+            bullet("Moving a block or dragging one of its edges works to the minute, and takes effect when you let go rather than as you drag.")
             bullet("Drag a block's middle to move it. Hover near its top or bottom edge and a grip appears — drag that to change when it started or ended.")
             bullet("Open a block to set exact start and end times, so you are never stuck with wherever the drag landed.")
             bullet("Finished sessions resize the same way. If you kept working past the end of one, pull its bottom edge down rather than logging a second block.")

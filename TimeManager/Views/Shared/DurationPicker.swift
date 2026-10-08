@@ -41,7 +41,7 @@ struct DurationPicker: View {
                     Stepper("", value: Binding(
                         get: { minutes },
                         set: { minutes = clamp($0); draft = "\(minutes)" }
-                    ), in: Self.range, step: 5)
+                    ), in: Self.range)
                     .labelsHidden()
                     Text("minutes")
                         .font(Theme.Font.caption)

@@ -107,8 +107,7 @@ struct RootView: View {
             model.offersBreakAfterReview = false
             isOfferingBreak = true
         }) { session in
-            ReflectionView(session: session,
-                           endedAutomatically: model.pendingReflectionWasAutomatic)
+            ReflectionView(session: session, ending: model.pendingReflectionEnding)
         }
         .sheet(isPresented: $isOfferingBreak) {
             BreakPromptView(

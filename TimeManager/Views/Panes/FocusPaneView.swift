@@ -407,11 +407,13 @@ struct FocusPaneView: View {
             }
             .controlSize(.large)
 
-            if session.remaining() <= 0 {
-                Button("Add 5 minutes") { model.extendSession(byMinutes: 5) }
-                    .buttonStyle(.link)
-                    .font(Theme.Font.caption)
-            }
+            // Offered throughout, not only once the time has run out: the
+            // moment you know you need another five minutes is usually the
+            // moment before the clock reaches zero.
+            Button("Add 5 minutes") { model.extendSession(byMinutes: 5) }
+                .accessibilityIdentifier("focus.extend")
+                .buttonStyle(.link)
+                .font(Theme.Font.caption)
 
             // Starting a break here pauses the session, which is the whole
             // reason to offer it from inside one: a break counted as work is

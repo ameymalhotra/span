@@ -2,8 +2,8 @@ import SwiftUI
 
 /// One drawable span on the day timeline.
 ///
-/// The timeline draws three different records — sessions, hand-made entries and
-/// passively tracked app activity — so they are normalised into this single
+/// The timeline draws several different records — sessions, hand-made entries,
+/// breaks and passively tracked app activity — so they are normalised into this single
 /// value type up front. Views then lay out and hit-test one homogeneous
 /// collection instead of branching per source at every step.
 struct TimelineBlock: Identifiable, Hashable {
@@ -13,6 +13,8 @@ struct TimelineBlock: Identifiable, Hashable {
         case session
         /// A block the user wrote by hand.
         case entry
+        /// A break taken from the Focus pane.
+        case rest
         /// Passively tracked app usage.
         case activity
         /// Time away from the keyboard.
@@ -37,9 +39,17 @@ struct TimelineBlock: Identifiable, Hashable {
 
     var duration: TimeInterval { max(0, end.timeIntervalSince(start)) }
 
+    /// The same block over a different stretch of the day, for showing where a
+    /// drag has got to without writing anything down.
+    func spanning(from start: Date, to end: Date) -> TimelineBlock {
+        TimelineBlock(id: id, kind: kind, title: title, subtitle: subtitle,
+                      category: category, start: start, end: end, focusRating: focusRating)
+    }
+
     var color: Color {
         switch kind {
         case .idle: return Theme.tertiaryLabel
+        case .rest: return Theme.rest
         case .activity, .session, .entry: return CategoryPalette.color(for: category ?? title)
         }
     }
@@ -107,6 +117,21 @@ extension TimelineBlock {
             category: entry.category.isEmpty ? nil : entry.category,
             start: entry.startedAt,
             end: entry.endedAt,
+            focusRating: nil
+        )
+    }
+
+    /// A break, in the lane beside the work it interrupted. A running one is
+    /// drawn to when it is due to end, the way a running session is.
+    static func block(for record: BreakRecord) -> TimelineBlock {
+        TimelineBlock(
+            id: "break-\(record.id)",
+            kind: .rest,
+            title: "Break",
+            subtitle: nil,
+            category: nil,
+            start: record.startedAt,
+            end: record.end,
             focusRating: nil
         )
     }

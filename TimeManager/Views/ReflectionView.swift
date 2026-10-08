@@ -6,9 +6,9 @@ struct ReflectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     let session: WorkSession
-    /// True when Span ended the session because it was left running, so the
-    /// sheet can account for a session the user never finished themselves.
-    var endedAutomatically = false
+    /// How the session ended, so the sheet can account for one the user did not
+    /// finish themselves.
+    var ending: SessionEnding = .byHand
 
     @State private var focus = 3
     /// Starts unset rather than pre-filled. Defaulting this to the full elapsed
@@ -45,15 +45,26 @@ struct ReflectionView: View {
             Text("Be kind and honest — this is for you, not a scorecard.")
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.secondaryLabel)
-            if endedAutomatically {
-                Label("Finished for you at \(Format.timeOfDay(session.endedAt ?? .now)), where you stopped — it was left running.",
-                      systemImage: "moon.zzz")
+            if let note = endingNote {
+                Label(note.text, systemImage: note.symbol)
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.secondaryLabel)
                     .accessibilityIdentifier("reflection.autoFinished")
             }
         }
         .padding(Theme.Space.l)
+    }
+
+    /// Why this session is over, when the user was not the one who ended it.
+    private var endingNote: (text: String, symbol: String)? {
+        let at = Format.timeOfDay(session.endedAt ?? .now)
+        switch ending {
+        case .byHand: return nil
+        case .plannedEnd:
+            return ("Finished at \(at), when its planned time ran out.", "checkmark.circle")
+        case .abandoned:
+            return ("Finished for you at \(at), where you stopped — it was left running.", "moon.zzz")
+        }
     }
 
     private var form: some View {

@@ -4,6 +4,21 @@ import Observation
 import SwiftData
 import SwiftUI
 
+/// Why a session stopped.
+///
+/// The review sheet says as much when the user was not the one who ended it,
+/// and only an abandoned session declines to offer a break afterwards — nobody
+/// who left a session running overnight is sitting there waiting to be told to
+/// rest.
+enum SessionEnding {
+    /// The user pressed Finish.
+    case byHand
+    /// Its planned time ran out.
+    case plannedEnd
+    /// Nobody was there, and Span closed it where the user stopped.
+    case abandoned
+}
+
 /// The single source of truth shared by the main window, the menu bar item and
 /// the floating HUD.
 ///
@@ -50,9 +65,9 @@ final class AppModel {
     /// than dropping the review on the floor.
     var pendingReflection: WorkSession?
 
-    /// Whether `pendingReflection` was ended by Span rather than by the user,
-    /// so the sheet can say why a session the user never finished is over.
-    private(set) var pendingReflectionWasAutomatic = false
+    /// How `pendingReflection` came to an end, so the sheet can say why a
+    /// session the user did not finish themselves is over.
+    private(set) var pendingReflectionEnding: SessionEnding = .byHand
 
     /// Set when a session the user finished themselves is owed the offer of a
     /// break, once its review has been dealt with. A session Span closed on its
@@ -71,6 +86,9 @@ final class AppModel {
     /// can put the user back to work rather than leaving a session paused for
     /// them to notice later — and so the pane can say as much.
     private(set) var sessionPausedForBreak = false
+    /// The record the running break is being written to, so the timeline can
+    /// draw it while it runs and keep it once it is over.
+    private var runningBreak: BreakRecord?
 
     var isOnBreak: Bool { breakEndsAt != nil }
 
@@ -145,6 +163,7 @@ final class AppModel {
         // After recovery, so a session closed just above is measured at the
         // length it is finally recorded with.
         ModelStack.clampReviewsToWorkedTime(in: context)
+        ModelStack.closeOpenBreaks(in: context)
         refreshActiveSession()
         tracker.start()
         retune()
@@ -280,17 +299,35 @@ final class AppModel {
     /// which quietly skipped the review and left the session counted as
     /// finished but unreviewed for good.
     @discardableResult
-    func finishSession(at date: Date = .now, automatically: Bool = false) -> WorkSession? {
+    func finishSession(at date: Date = .now, ending: SessionEnding = .byHand) -> WorkSession? {
         guard let session = activeSession else { return nil }
+
+        // Clicking Finish five minutes after the hour was up does not buy five
+        // more minutes. A session lasts the time it was given; going over is
+        // something you ask for, by adding minutes or by pulling its edge down
+        // afterwards, not something that happens because nobody was looking.
+        var end = date
+        if ending == .byHand, let planned = session.plannedEnd(at: date), planned < date {
+            end = planned
+        }
+
         NotificationService.cancelReminder(for: session)
-        session.complete(at: date)
+        session.complete(at: end)
         save()
         activeSession = nil
         pendingReflection = session
-        pendingReflectionWasAutomatic = automatically
-        offersBreakAfterReview = !automatically && !isOnBreak
+        pendingReflectionEnding = ending
+        offersBreakAfterReview = ending != .abandoned && !isOnBreak
         refreshStats()
         return session
+    }
+
+    /// Ends a session that has run the time it was given, on the minute it was
+    /// due rather than whenever the next tick happens to land.
+    func finishAtPlannedEndIfDue(at date: Date = .now) {
+        guard let session = activeSession, session.status == .active,
+              let planned = session.plannedEnd(at: date), planned <= date else { return }
+        finishSession(at: planned, ending: .plannedEnd)
     }
 
     /// How long a session may sit untouched before it is finished for the
@@ -330,7 +367,7 @@ final class AppModel {
 
         let end = max(session.startedAt, min(lastKnownGood, now))
         guard now.timeIntervalSince(end) >= grace else { return nil }
-        return finishSession(at: end, automatically: true)
+        return finishSession(at: end, ending: .abandoned)
     }
 
     func extendSession(byMinutes minutes: Int) {
@@ -338,6 +375,74 @@ final class AppModel {
         activeSession.plannedMinutes += minutes
         save()
         NotificationService.scheduleEndReminder(for: activeSession)
+        // The menu bar and the HUD can both extend, and neither runs the
+        // one-second clock: without this the countdown they are showing sits
+        // at its old number for up to fifteen seconds after the click.
+        refreshStats()
+    }
+
+    /// Puts a finished session back to work, with its end where the user has
+    /// just put it.
+    ///
+    /// Dragging a finished session's lower edge past now is the Guide's own
+    /// advice for "I kept working past the end of this one" — but the session
+    /// stayed finished. The timeline drew a block reaching into the future, its
+    /// last run counted minutes nobody had worked yet, and nothing anywhere was
+    /// counting down. A finished session whose end has not happened yet is a
+    /// session that is still running, so that is what it becomes.
+    ///
+    /// Returns false when the end is not in the future, or when another session
+    /// is already running — the caller then holds the end at now rather than
+    /// leaving a finished session ending in the future.
+    @discardableResult
+    func resumeSession(_ session: WorkSession, endingAt end: Date, at now: Date = .now) -> Bool {
+        guard session.status == .completed, end > now else { return false }
+        if activeSession == nil { refreshActiveSession() }
+        guard activeSession == nil else { return false }
+
+        clearBreak(resumingWork: false)
+
+        // The last run is reopened rather than a new one begun: the user
+        // dragged one continuous block, and a fresh segment would draw a gap
+        // across the very stretch they are claiming to have worked.
+        if let last = session.segments
+            .max(by: { ($0.endedAt ?? $0.startedAt) < ($1.endedAt ?? $1.startedAt) }) {
+            last.endedAt = nil
+        } else {
+            session.beginSegment(at: session.startedAt)
+        }
+        session.endedAt = nil
+        session.pausedAt = nil
+        session.statusRaw = SessionStatus.active.rawValue
+
+        // Measured the way the timeline measures a running session's edge:
+        // what has been worked, plus what is left until the end just set.
+        let planned = session.elapsed(at: now) + end.timeIntervalSince(now)
+        session.plannedMinutes = max(1, Int((planned / 60).rounded()))
+
+        save()
+        activeSession = session
+        NotificationService.scheduleEndReminder(for: session)
+        refreshStats()
+        return true
+    }
+
+    /// The longest a session may be planned for, matching the duration picker.
+    static let plannedMinutesLimit = 600
+
+    /// Sets a running session's planned length.
+    ///
+    /// Never below the time the session has already run. A session planned
+    /// shorter than its own history has a planned end that has been and gone,
+    /// and finishing it there would discard the work recorded in between — so
+    /// asking for forty minutes on a session that has run fifty ends it now,
+    /// with its fifty minutes intact, rather than ten minutes ago.
+    func setPlannedMinutes(_ minutes: Int, for session: WorkSession) {
+        let floor = max(1, session.workedMinutes())
+        session.plannedMinutes = max(floor, min(minutes, Self.plannedMinutesLimit))
+        save()
+        NotificationService.scheduleEndReminder(for: session)
+        refreshStats()
     }
 
     // MARK: - Breaks
@@ -361,6 +466,11 @@ final class AppModel {
         }
         let length = TimeInterval(max(1, minutes) * 60)
         let end = date.addingTimeInterval(length)
+        closeRunningBreak(at: date)
+        let record = BreakRecord(startedAt: date, plannedEnd: end)
+        context.insert(record)
+        runningBreak = record
+        save()
         breakEndsAt = end
         breakLength = length
         NotificationService.scheduleBreakEnd(at: end)
@@ -372,8 +482,30 @@ final class AppModel {
         let end = breakEndsAt.addingTimeInterval(TimeInterval(minutes * 60))
         self.breakEndsAt = end
         breakLength += TimeInterval(minutes * 60)
+        runningBreak?.plannedEnd = end
+        save()
         NotificationService.scheduleBreakEnd(at: end)
         refreshStats()
+    }
+
+    /// Moves the running break's end to `date`, as dragging its block on the
+    /// timeline does. A minute is kept on the clock, for the same reason a
+    /// running session's is: ending the break is the button's job, not the
+    /// drag handle's.
+    func setBreakEnd(_ date: Date, now: Date = .now) {
+        guard let breakEndsAt, let record = runningBreak else { return }
+        let end = max(date, now.addingTimeInterval(60))
+        breakLength += end.timeIntervalSince(breakEndsAt)
+        self.breakEndsAt = end
+        record.plannedEnd = end
+        save()
+        NotificationService.scheduleBreakEnd(at: end)
+        refreshStats()
+    }
+
+    /// Whether `record` is the break running now.
+    func isRunningBreak(_ record: BreakRecord) -> Bool {
+        runningBreak?.id == record.id
     }
 
     /// Ends the break. Coming back deliberately resumes the session the break
@@ -385,13 +517,24 @@ final class AppModel {
         refreshStats()
     }
 
-    private func clearBreak(resumingWork: Bool) {
+    private func clearBreak(resumingWork: Bool, at date: Date = .now) {
+        closeRunningBreak(at: date)
         breakEndsAt = nil
         breakLength = 0
         NotificationService.cancelBreakEnd()
         let shouldResume = sessionPausedForBreak && resumingWork
         sessionPausedForBreak = false
         if shouldResume, activeSession?.status == .paused { resumeSession() }
+    }
+
+    /// Writes down where the running break stopped. Never past its planned
+    /// end: a Mac that slept through the end of a break did not rest for the
+    /// whole time it was asleep, as far as anyone can vouch.
+    private func closeRunningBreak(at date: Date) {
+        guard let record = runningBreak else { return }
+        runningBreak = nil
+        record.endedAt = max(record.startedAt, min(date, record.plannedEnd))
+        save()
     }
 
     /// Adds a hand-made block on `day`: at the current time when that is today,
@@ -452,7 +595,11 @@ final class AppModel {
         // Before anything is measured: a session the user left hours ago must
         // not spend this tick counting, nor be announced as ending.
         autoFinishIfAbandoned(at: now, idleFor: idleClock())
+        // Sounded while it is still running, then ended: the chime belongs to
+        // the session, and announceEnd has nothing to say about a session that
+        // has already stopped.
         NotificationService.announceEndIfDue(for: activeSession, at: now)
+        finishAtPlannedEndIfDue(at: now)
 
         finishBreakIfDue(at: now)
         breakClock = Format.clock(breakRemaining(at: now))
@@ -517,7 +664,7 @@ final class AppModel {
     func finishBreakIfDue(at date: Date) {
         guard let end = breakEndsAt, date >= end else { return }
         NotificationService.announceBreakEnd(at: end)
-        clearBreak(resumingWork: false)
+        clearBreak(resumingWork: false, at: end)
     }
 
     private func save() {
