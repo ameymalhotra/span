@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-329 tests, about a second.
+381 unit tests in 20 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
