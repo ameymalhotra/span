@@ -437,6 +437,7 @@ private struct LogTabDetail: View {
     @Binding var draft: LogDraft
     let onStartSession: () -> Void
 
+    @AppStorage("log.lastTabID") private var lastLogTabRaw = ""
     @State private var savedFlash = false
     @State private var copiedFlash = false
     @State private var saveError: String?
@@ -595,6 +596,7 @@ private struct LogTabDetail: View {
                                  session: linkedSession, in: context)
             draft.clearText()
             saveError = nil
+            lastLogTabRaw = tab.id.uuidString
             flash($savedFlash)
         } catch {
             // The text stays in the fields, so nothing typed is lost.
