@@ -95,6 +95,14 @@ The day and week then show two separate numbers — time on the clock, and time
 that felt real. **The gap between them is the point.** A timer alone will
 happily tell you that you worked eight hours.
 
+### ✎ The Log
+
+The timer says how long; the Log says **where you left off**. Give each thing
+you keep coming back to a tab — grouped under headings if you like — and write
+where to pick up next time and what got done. The latest resume point greets
+you when you start a session for that tab, and the review sheet can ask for it
+when a session ends. The menu bar writes one with no timer at all.
+
 </td>
 </tr>
 <tr>
@@ -183,7 +191,7 @@ One file, on your Mac:
 
 Nothing you record is ever uploaded. **Settings → Your data** can delete the
 tracked activity on its own, or reset Span entirely — every session, block,
-category and preference — and start the setup questions again. Both ask you to
+category, Log entry and preference — and start the setup questions again. Both ask you to
 type a confirmation phrase first, because neither can be undone.
 
 The one thing Span sends anywhere is a **daily check against the GitHub releases
@@ -283,6 +291,7 @@ TimeManager/
 - [ ] A weekly review that makes the reflection data earn its keep
 - [ ] Attributing idle time — saying what a break actually was
 - [ ] Export to CSV and JSON
+- [ ] Copy each Log entry to its tab in a Google Doc, offline-safe
 - [ ] Rules finer than the app name — a URL, not just "Safari"
 
 ---

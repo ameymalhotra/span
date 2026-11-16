@@ -21,6 +21,7 @@ struct GuideView: View {
                 tracking
                 categories
                 review
+                log
                 surfaces
                 tuning
                 personal
@@ -118,9 +119,20 @@ struct GuideView: View {
         }
     }
 
+    private var log: some View {
+        card("The Log", "Where you left off, not just how long you worked.") {
+            para("Give each thing you keep coming back to — a course, a paper, a client — a tab in the Log. Each entry says where to pick up next time and, if you like, what you got done. On a rushed day the resume point alone is enough.")
+            para("The newest resume point sits at the top of the tab as Pick up here, and you see it again on the start sheet when you choose that tab, in Pick up again on the Focus pane, and in the menu bar.")
+            bullet("Groups are only headings, like Research above several research tabs. Right-click a tab to move it to one, recolour, rename, archive or delete it.")
+            bullet("When a session ends, the review sheet asks where you left off and saves it to the session's tab, with the time worked. Turn that off in Settings if you'd rather log only when you choose.")
+            bullet("The menu bar's Log Entry works with no timer running, and then records no duration.")
+            bullet("Entries can be edited, including their date, so you can bring over old ones. Copy as Text gives a tab back in the same layout as a Google Doc log.")
+        }
+    }
+
     private var surfaces: some View {
         card("Menu bar and the floating HUD", "For when the window is not in front.") {
-            bullet("The menu bar shows the running session's remaining time, and its panel can start, pause and finish one.")
+            bullet("The menu bar shows the running session's remaining time, and its panel can pause and finish one or write a Log entry.")
             bullet("The HUD is the small capsule below the menu bar: time since your last break, focus today, and how close you are to your target. Clicking it never takes focus away from whatever you are working in.")
             bullet("Drag the HUD anywhere along the top of the screen; it remembers where you put it. Hide it from Settings, the status bar, or its own menu.")
             GuideDiagram.hud
