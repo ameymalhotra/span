@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 /// What has been typed into a log form but not saved yet.
 ///
@@ -41,7 +42,7 @@ enum LogBook {
 
     /// Trims surrounding whitespace and blank lines, leaving the text inside
     /// alone — a list typed one item per line stays a list.
-    static func clean(_ text: String) -> String {
+    nonisolated static func clean(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

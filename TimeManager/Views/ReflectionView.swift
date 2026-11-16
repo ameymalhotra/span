@@ -31,6 +31,14 @@ struct ReflectionView: View {
 
     private var showsLog: Bool { asksForLog && logTabs.contains { !$0.isArchived } }
 
+    init(session: WorkSession, ending: SessionEnding = .byHand) {
+        self.session = session
+        self.ending = ending
+        // Seeded here rather than on appear, so the cursor can land in the
+        // resume field the moment the sheet opens.
+        _logDraft = State(initialValue: LogDraft(tabID: session.logTabID))
+    }
+
     private var maximumMinutes: Int { max(1, Int(session.elapsed() / 60)) }
 
     var body: some View {
@@ -47,7 +55,7 @@ struct ReflectionView: View {
         .interactiveDismissDisabled()
         .onAppear {
             // The tab the session was started for, if it is still around.
-            logDraft.tabID = LogBook.activeTab(id: session.logTabID, in: logTabs)?.id
+            if LogBook.activeTab(id: logDraft.tabID, in: logTabs) == nil { logDraft.tabID = nil }
         }
     }
 

@@ -511,7 +511,7 @@ private struct LogTabDetail: View {
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(LogBook.plainText(for: tab.entries), forType: .string)
-                flash($copiedFlash)
+                flash(.copiedFlash)
             } label: {
                 Label(copiedFlash ? "Copied" : "Copy as Text",
                       systemImage: copiedFlash ? "checkmark" : "doc.on.doc")
@@ -597,7 +597,7 @@ private struct LogTabDetail: View {
             draft.clearText()
             saveError = nil
             lastLogTabRaw = tab.id.uuidString
-            flash($savedFlash)
+            flash(.savedFlash)
         } catch {
             // The text stays in the fields, so nothing typed is lost.
             saveError = "Not saved: \(error.localizedDescription)"
@@ -644,11 +644,23 @@ private struct LogTabDetail: View {
             .foregroundStyle(Theme.tertiaryLabel)
     }
 
-    private func flash(_ flag: Binding<Bool>) {
-        withAnimation(.easeOut(duration: 0.15)) { flag.wrappedValue = true }
+    private enum Flash { case savedFlash, copiedFlash }
+
+    /// Shows a brief confirmation, then fades it.
+    private func flash(_ which: Flash) {
+        set(which, true, animation: .easeOut(duration: 0.15))
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.8))
-            withAnimation(.easeIn(duration: 0.3)) { flag.wrappedValue = false }
+            set(which, false, animation: .easeIn(duration: 0.3))
+        }
+    }
+
+    private func set(_ which: Flash, _ value: Bool, animation: Animation) {
+        withAnimation(animation) {
+            switch which {
+            case .savedFlash: savedFlash = value
+            case .copiedFlash: copiedFlash = value
+            }
         }
     }
 }
