@@ -144,6 +144,76 @@ struct PersistenceTests {
         }
     }
 
+    // MARK: - Log
+
+    @Test("a log tab and its entries survive a reopen")
+    func logRoundTrip() throws {
+        let sessionID = UUID()
+        try roundTrip { context in
+            let tab = LogTab(name: "Vector DB course", group: "Research", colorSlot: 3, sortIndex: 2)
+            tab.isArchived = true
+            context.insert(tab)
+            let entry = LogEntry(tab: tab, recordedAt: Clock.at(hour: 23.5),
+                                 resumePoint: "Continue the course", done: "Completed the quiz")
+            entry.sessionID = sessionID
+            entry.sessionTitle = "Quiz"
+            entry.workedSeconds = 1500
+            context.insert(entry)
+            tab.entries.append(entry)
+        } verify: { context in
+            let tab = try #require(try context.fetch(FetchDescriptor<LogTab>()).first)
+            #expect(tab.name == "Vector DB course")
+            #expect(tab.group == "Research")
+            #expect(tab.colorSlot == 3)
+            #expect(tab.sortIndex == 2)
+            #expect(tab.isArchived)
+            #expect(tab.entries.count == 1)
+            let entry = try #require(tab.entries.first)
+            #expect(entry.tab?.id == tab.id)
+            #expect(entry.recordedAt == Clock.at(hour: 23.5))
+            #expect(entry.resumePoint == "Continue the course")
+            #expect(entry.done == "Completed the quiz")
+            #expect(entry.sessionID == sessionID)
+            #expect(entry.sessionTitle == "Quiz")
+            #expect(entry.workedSeconds == 1500)
+        }
+    }
+
+    @Test("a session keeps the log tab it was started for")
+    func sessionLogTabRoundTrip() throws {
+        let tabID = UUID()
+        try roundTrip { context in
+            let session = WorkSession(title: "Lab", plannedMinutes: 25)
+            session.logTabID = tabID
+            context.insert(session)
+        } verify: { context in
+            #expect(try context.fetch(FetchDescriptor<WorkSession>()).first?.logTabID == tabID)
+        }
+    }
+
+    @Test("a store written before the log existed opens with it, data intact")
+    func storeFromBeforeTheLog() throws {
+        try TestStore.withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("Old.store")
+            do {
+                let old = Schema([WorkSession.self, SessionSegment.self, ActivityRecord.self,
+                                  TimeEntry.self, BreakRecord.self, TimeCategory.self,
+                                  AppCategoryRule.self])
+                let container = try ModelContainer(for: old, configurations: ModelConfiguration(url: url))
+                container.mainContext.insert(TimeEntry(title: "Walk", startedAt: Clock.at(hour: 12),
+                                                       endedAt: Clock.at(hour: 13)))
+                try container.mainContext.save()
+            }
+            let reopened = try TestStore.onDisk(at: url)
+            let context = reopened.mainContext
+            #expect(try context.fetch(FetchDescriptor<TimeEntry>()).count == 1)
+            #expect(try context.fetch(FetchDescriptor<LogTab>()).isEmpty)
+            context.insert(LogTab(name: "Course"))
+            try context.save()
+            #expect(try context.fetch(FetchDescriptor<LogTab>()).count == 1)
+        }
+    }
+
     // MARK: - Other models
 
     @Test("a hand-written entry round-trips")

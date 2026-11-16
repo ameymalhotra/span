@@ -75,6 +75,11 @@ final class AppModel {
     /// to be told to rest.
     var offersBreakAfterReview = false
 
+    /// What is half-typed in the menu bar's log form. Kept here rather than in
+    /// the popover's own state, which is thrown away every time the popover
+    /// closes — clicking away to check something must not lose the entry.
+    var menuBarLogDraft = LogDraft()
+
     /// When the running break ends, if one is running.
     private(set) var breakEndsAt: Date?
     /// Pre-formatted, for the same reason as `sessionClock`.
@@ -227,7 +232,7 @@ final class AppModel {
     /// accumulating against the day's total. The menu bar, the HUD and the
     /// keyboard shortcut all reach this directly.
     @discardableResult
-    func startSession(title: String, category: String, minutes: Int) -> WorkSession? {
+    func startSession(title: String, category: String, minutes: Int, logTabID: UUID? = nil) -> WorkSession? {
         if activeSession == nil { refreshActiveSession() }
         guard activeSession == nil else { return nil }
 
@@ -236,6 +241,7 @@ final class AppModel {
         clearBreak(resumingWork: false)
 
         let session = WorkSession(title: title, category: category, plannedMinutes: minutes)
+        session.logTabID = logTabID
         session.beginSegment()
         context.insert(session)
         save()

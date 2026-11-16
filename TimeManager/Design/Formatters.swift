@@ -67,6 +67,67 @@ enum Format {
         return "\(Int((fraction * 100).rounded()))%"
     }
 
+    // MARK: - Log
+
+    /// `14 July 2026` — the date line of the old Google Doc, kept identical so
+    /// copied entries sit beside the ones already there without looking
+    /// different. Fixed English, like the Doc.
+    static func logDocDate(_ date: Date) -> String {
+        logDocDateFormatter.string(from: date)
+    }
+
+    /// `11:30 PM`, the Doc's time line.
+    static func logDocTime(_ date: Date) -> String {
+        logDocTimeFormatter.string(from: date)
+    }
+
+    /// `Tue 14 Jul 2026 · 11:30 PM` for history rows; the year is dropped
+    /// inside the current year.
+    static func logStamp(_ date: Date, relativeTo reference: Date = .now) -> String {
+        let calendar = Calendar.current
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: reference)
+        let day = (sameYear ? logDayFormatter : logDayYearFormatter).string(from: date)
+        return "\(day) · \(timeOfDay(date))"
+    }
+
+    /// `Today, 11:30 PM`, `Yesterday, 1:27 AM`, `Tue 14 Jul, 11:30 PM` — for
+    /// the "Pick up here" card, where how long ago matters more than the date.
+    static func logRelative(_ date: Date, relativeTo reference: Date = .now) -> String {
+        let calendar = Calendar.current
+        let time = timeOfDay(date)
+        if calendar.isDate(date, inSameDayAs: reference) { return "Today, \(time)" }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: reference),
+           calendar.isDate(date, inSameDayAs: yesterday) { return "Yesterday, \(time)" }
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: reference)
+        return "\((sameYear ? logDayFormatter : logDayYearFormatter).string(from: date)), \(time)"
+    }
+
+    private static let logDocDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "d MMMM yyyy"
+        return f
+    }()
+
+    private static let logDocTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
+    private static let logDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE d MMM")
+        return f
+    }()
+
+    private static let logDayYearFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE d MMM yyyy")
+        return f
+    }()
+
     private static let hourFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "h a"

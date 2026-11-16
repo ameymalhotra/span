@@ -19,6 +19,11 @@ final class WorkSession {
     /// Whether the user has been asked for a review and what they answered.
     /// Defaulted, so it migrates into the existing store without a custom stage.
     var reflectionStateRaw: String = ReflectionState.pending.rawValue
+    /// The Log tab this session is for, if any. A plain ID rather than a
+    /// relationship, the same way `category` is a plain name: an archived or
+    /// deleted tab simply reads as "no tab". Optional, so it migrates into the
+    /// existing store without a custom stage.
+    var logTabID: UUID?
 
     /// The individual runs that make up this session. Added so the timeline can
     /// draw the time actually worked rather than one block spanning the breaks.

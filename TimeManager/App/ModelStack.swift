@@ -13,6 +13,8 @@ enum ModelStack {
         BreakRecord.self,
         TimeCategory.self,
         AppCategoryRule.self,
+        LogTab.self,
+        LogEntry.self,
     ])
 
     static func makeContainer() -> ModelContainer {
@@ -102,6 +104,7 @@ enum ModelStack {
         "hud.visible", "hud.xFraction", "hud.topOffset",
         "hasOnboarded", "hasSeenGuide", "timeline.hourHeight", "timelineGrouping",
         "pickUpDismissed",
+        "log.promptAtSessionEnd", "log.lastTabID", "log.selectedTabID",
     ]
 
     /// Deletes tracked application activity, optionally only today's.
@@ -130,6 +133,8 @@ enum ModelStack {
         try? context.delete(model: WorkSession.self)
         try? context.delete(model: AppCategoryRule.self)
         try? context.delete(model: TimeCategory.self)
+        try? context.delete(model: LogEntry.self)
+        try? context.delete(model: LogTab.self)
         try? context.save()
 
         for key in preferenceKeys {
