@@ -187,7 +187,8 @@ struct PersistenceTests {
             session.logTabID = tabID
             context.insert(session)
         } verify: { context in
-            #expect(try context.fetch(FetchDescriptor<WorkSession>()).first?.logTabID == tabID)
+            let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+            #expect(sessions.first?.logTabID == tabID)
         }
     }
 
