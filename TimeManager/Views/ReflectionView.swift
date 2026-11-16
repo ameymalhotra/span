@@ -22,6 +22,15 @@ struct ReflectionView: View {
     @State private var distractions = 0
     @State private var note = ""
 
+    /// Whether the review also asks where you left off. A setting, because not
+    /// every session ends a stretch of work worth a handoff.
+    @AppStorage("log.promptAtSessionEnd") private var asksForLog = true
+    @Query(sort: \LogTab.sortIndex) private var logTabs: [LogTab]
+    @State private var logDraft = LogDraft()
+    @State private var logError: String?
+
+    private var showsLog: Bool { asksForLog && logTabs.contains { !$0.isArchived } }
+
     private var maximumMinutes: Int { max(1, Int(session.elapsed() / 60)) }
 
     var body: some View {
@@ -36,6 +45,10 @@ struct ReflectionView: View {
         // No silent third exit: the sheet is dismissed by Save or by Skip, both
         // of which record what happened.
         .interactiveDismissDisabled()
+        .onAppear {
+            // The tab the session was started for, if it is still around.
+            logDraft.tabID = LogBook.activeTab(id: session.logTabID, in: logTabs)?.id
+        }
     }
 
     private var header: some View {
@@ -69,6 +82,10 @@ struct ReflectionView: View {
 
     private var form: some View {
         Form {
+            if showsLog {
+                logSection
+            }
+
             Section("How focused were you?") {
                 Picker("Focus", selection: $focus) {
                     ForEach(1...5, id: \.self) { Text("\($0)").tag($0) }
@@ -116,12 +133,62 @@ struct ReflectionView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 340)
+        .frame(height: showsLog ? 560 : 340)
+    }
+
+    /// First, because it is the part you will read again: where you stopped
+    /// and what is next. Saved by either button, so skipping the ratings never
+    /// throws away the handoff.
+    private var logSection: some View {
+        Section {
+            LogTabPicker(selection: $logDraft.tabID, identifier: "reflection.logTab")
+            if let tab = LogBook.activeTab(id: logDraft.tabID, in: logTabs),
+               let last = LogBook.latestResumePoint(for: tab) {
+                Text("Last time: \(last.resumePoint)")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.secondaryLabel)
+                    .lineLimit(2)
+            }
+            LogEntryFields(
+                resumePoint: $logDraft.resumePoint,
+                done: $logDraft.done,
+                focusOnAppear: logDraft.tabID != nil,
+                identifier: "reflection.log"
+            )
+            .disabled(logDraft.tabID == nil)
+            if let logError {
+                Label(logError, systemImage: "exclamationmark.triangle")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Where did you leave off?")
+        } footer: {
+            if logDraft.tabID == nil {
+                Text("Choose a Log tab to write a handoff, or leave it and nothing is logged.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.tertiaryLabel)
+            }
+        }
+    }
+
+    /// Writes the handoff, if there is one. False when it could not be saved,
+    /// so the sheet stays open with the text still in it.
+    private func saveLog() -> Bool {
+        guard showsLog else { return true }
+        do {
+            try LogBook.save(logDraft, session: session, in: modelContext)
+            return true
+        } catch {
+            logError = "Not saved: \(error.localizedDescription)"
+            return false
+        }
     }
 
     private var footer: some View {
         HStack {
             Button("Skip for now") {
+                guard saveLog() else { return }
                 session.reflectionState = .skipped
                 save()
             }
@@ -131,6 +198,7 @@ struct ReflectionView: View {
             Spacer()
 
             Button("Save") {
+                guard saveLog() else { return }
                 session.focusRating = focus
                 session.honestWorkMinutes = honestMinutes ?? maximumMinutes
                 session.distractions = distractions

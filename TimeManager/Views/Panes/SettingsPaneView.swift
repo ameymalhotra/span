@@ -16,6 +16,7 @@ struct SettingsPaneView: View {
     @AppStorage("personalNote") private var personalNote = ""
     @AppStorage("update.checkAutomatically") private var checksForUpdates = true
     @AppStorage(NotificationService.soundEnabledKey) private var endSound = true
+    @AppStorage("log.promptAtSessionEnd") private var asksForLog = true
     /// Which destructive action is awaiting confirmation, if any.
     private enum PendingErase: String, Identifiable {
         case activity, everything
@@ -35,6 +36,7 @@ struct SettingsPaneView: View {
                 you
                 goals
                 categoriesSection
+                logSection
                 appsSection
                 tracking
                 alerts
@@ -85,6 +87,18 @@ struct SettingsPaneView: View {
     private var appsSection: some View {
         section("Apps on the timeline") {
             AppGroupingManager()
+        }
+    }
+
+    private var logSection: some View {
+        section("Log") {
+            row("Ask where you left off",
+                detail: "When a session ends, the review sheet also asks for a resume point and what was done, and saves them to the session's Log tab. Turn off to log only from the Log pane or the menu bar.") {
+                Toggle("", isOn: $asksForLog)
+                    .accessibilityIdentifier("settings.logPrompt")
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
         }
     }
 
