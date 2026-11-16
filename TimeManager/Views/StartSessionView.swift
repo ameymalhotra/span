@@ -13,7 +13,20 @@ struct StartSessionView: View {
     @State private var category = "Deep Work"
     @AppStorage("defaultSessionMinutes") private var minutes = 60
 
-    let onStart: (String, String, Int) -> Void
+    @Query(sort: \LogTab.sortIndex) private var logTabs: [LogTab]
+    /// The tab the last session was started for, offered again by default.
+    @AppStorage("log.lastTabID") private var lastLogTabRaw = ""
+    @State private var logTabID: UUID?
+    /// The title the sheet filled in from a tab's name, so picking another tab
+    /// can replace it — but never something the user typed.
+    @State private var prefilledTitle: String?
+
+    /// The tab to open with, when the sheet was opened from that tab in the Log.
+    var preselectedLogTabID: UUID? = nil
+    let onStart: (String, String, Int, UUID?) -> Void
+
+    private var logTab: LogTab? { LogBook.activeTab(id: logTabID, in: logTabs) }
+    private var hasLogTabs: Bool { logTabs.contains { !$0.isArchived } }
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -48,6 +61,24 @@ struct StartSessionView: View {
             Divider()
 
             Form {
+                if hasLogTabs {
+                    Section("Picking up") {
+                        // Only a choice made here adopts the tab's name and
+                        // category; the remembered default leaves both alone.
+                        LogTabPicker(selection: Binding(
+                            get: { logTabID },
+                            set: { new in
+                                guard new != logTabID else { return }
+                                logTabID = new
+                                adopt(LogBook.activeTab(id: new, in: logTabs))
+                            }
+                        ), noneLabel: "No log tab", identifier: "startSession.logTab")
+                        if let logTab {
+                            ResumeCard(tab: logTab, compact: true)
+                        }
+                    }
+                }
+
                 Section("What are you working on?") {
                     // `prompt`, not the label: inside a grouped Form the
                     // first string is the row's *label*, which macOS lays out
@@ -85,7 +116,10 @@ struct StartSessionView: View {
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Start") {
-                    onStart(trimmedTitle, category.trimmingCharacters(in: .whitespacesAndNewlines), minutes)
+                    let tabID = logTab?.id
+                    if hasLogTabs { lastLogTabRaw = tabID?.uuidString ?? "" }
+                    onStart(trimmedTitle, category.trimmingCharacters(in: .whitespacesAndNewlines),
+                            minutes, tabID)
                     dismiss()
                 }
                 .accessibilityIdentifier("startSession.start")
@@ -95,5 +129,27 @@ struct StartSessionView: View {
             .padding(Theme.Space.l)
         }
         .frame(width: 420)
+        .onAppear {
+            if let preselectedLogTabID {
+                logTabID = preselectedLogTabID
+                adopt(LogBook.activeTab(id: preselectedLogTabID, in: logTabs))
+            } else {
+                logTabID = LogBook.activeTab(id: UUID(uuidString: lastLogTabRaw), in: logTabs)?.id
+            }
+        }
+    }
+
+    /// Takes what a chosen tab implies: its name as the title while the title
+    /// is empty (or still the last tab's name), and the category last used
+    /// for it.
+    private func adopt(_ tab: LogTab?) {
+        if trimmedTitle.isEmpty || trimmedTitle == prefilledTitle {
+            title = tab?.name ?? ""
+            prefilledTitle = tab?.name
+        }
+        if let tab, let previous = sessions.first(where: { $0.logTabID == tab.id }) {
+            let name = previous.category.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { category = name }
+        }
     }
 }

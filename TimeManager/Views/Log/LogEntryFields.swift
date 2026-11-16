@@ -61,7 +61,7 @@ struct LogEntryFields: View {
             guard focusOnAppear else { return }
             // A beat later: focus set during the first layout pass of a sheet
             // or popover is dropped.
-            DispatchQueue.main.async { focus = .resume }
+            Task { @MainActor in focus = .resume }
         }
     }
 

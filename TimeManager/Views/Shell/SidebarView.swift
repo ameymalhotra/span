@@ -7,6 +7,7 @@ struct SidebarView: View {
         List(selection: $selection) {
             Section("Track") {
                 row(.focus)
+                row(.log)
                 row(.timeline)
             }
             Section("Review") {

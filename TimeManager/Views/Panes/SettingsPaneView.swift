@@ -384,7 +384,7 @@ struct SettingsPaneView: View {
             case .everything:
                 DestructiveConfirmation(
                     title: "Reset Span completely?",
-                    message: "Every session and its review, every block you wrote, every category and app rule, and all your preferences will be erased. Span will start as if freshly installed and ask the setup questions again.",
+                    message: "Every session and its review, every block you wrote, every category and app rule, every Log tab and entry, and all your preferences will be erased. Span will start as if freshly installed and ask the setup questions again.",
                     phrase: "delete everything",
                     confirmLabel: "Erase everything",
                     onConfirm: {

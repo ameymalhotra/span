@@ -19,6 +19,7 @@ struct FocusPaneView: View {
     @Query private var todaySessions: [WorkSession]
     @Query private var recentSessions: [WorkSession]
     @Query private var todayEntries: [TimeEntry]
+    @Query(sort: \LogTab.sortIndex) private var logTabs: [LogTab]
 
     let onStart: () -> Void
     let onFinish: () -> Void
@@ -240,19 +241,32 @@ struct FocusPaneView: View {
     /// One tap starts the same work again; the cross clears it for today.
     private func resumeRow(_ session: WorkSession) -> some View {
         HStack(spacing: Theme.Space.s) {
+            let logTab = LogBook.activeTab(id: session.logTabID, in: logTabs)
             Button {
                 model.startSession(title: session.title,
                                    category: session.category,
-                                   minutes: defaultSessionMinutes)
+                                   minutes: defaultSessionMinutes,
+                                   logTabID: logTab?.id)
             } label: {
                 HStack(spacing: Theme.Space.s) {
                     Circle()
                         .fill(CategoryPalette.color(for: session.category))
                         .frame(width: 8, height: 8)
-                    Text(session.title)
-                        .font(Theme.Font.body)
-                        .foregroundStyle(Theme.label)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.title)
+                            .font(Theme.Font.body)
+                            .foregroundStyle(Theme.label)
+                            .lineLimit(1)
+                        // Where the log says to resume, so the idle screen
+                        // answers "where was I" as well as "what was I doing".
+                        if let logTab, let next = LogBook.latestResumePoint(for: logTab) {
+                            Text("Next: \(next.resumePoint)")
+                                .font(Theme.Font.caption)
+                                .foregroundStyle(Theme.secondaryLabel)
+                                .lineLimit(1)
+                                .accessibilityIdentifier("focus.pickUp.next")
+                        }
+                    }
                     Spacer(minLength: Theme.Space.s)
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 10))

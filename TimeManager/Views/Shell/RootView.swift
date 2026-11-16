@@ -2,13 +2,14 @@ import SwiftData
 import SwiftUI
 
 enum Destination: String, Hashable, CaseIterable, Identifiable {
-    case focus, timeline, day, insights, categories, guide, settings
+    case focus, log, timeline, day, insights, categories, guide, settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .focus: "Focus"
+        case .log: "Log"
         case .timeline: "Timeline"
         case .day: "Day"
         case .insights: "Insights"
@@ -21,6 +22,7 @@ enum Destination: String, Hashable, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .focus: "target"
+        case .log: "book.pages"
         case .timeline: "calendar.day.timeline.left"
         case .day: "square.grid.2x2"
         case .insights: "chart.bar"
@@ -52,6 +54,8 @@ struct RootView: View {
     private static let minimumWidth: CGFloat = sidebarWidth + centreMinimum + timelineMinimum + 40
     private static let minimumHeight: CGFloat = 620
     @State private var isStartingSession = false
+    /// The Log tab the start sheet opens with, when it was opened from a tab.
+    @State private var startSessionTabID: UUID?
     @State private var isOfferingBreak = false
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
 
@@ -93,9 +97,10 @@ struct RootView: View {
             .environment(model)
             .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $isStartingSession) {
-            StartSessionView { title, category, minutes in
-                model.startSession(title: title, category: category, minutes: minutes)
+        .sheet(isPresented: $isStartingSession, onDismiss: { startSessionTabID = nil }) {
+            StartSessionView(preselectedLogTabID: startSessionTabID) { title, category, minutes, logTabID in
+                model.startSession(title: title, category: category, minutes: minutes,
+                                   logTabID: logTabID)
             }
         }
         // Bound to the model, so a session finished from the menu bar or the
@@ -127,6 +132,10 @@ struct RootView: View {
                 // The timeline earns the whole pane when it is the destination;
                 // elsewhere it stays alongside as persistent context.
                 timeline(for: selectedDate.wrappedValue)
+            } else if destination == .log {
+                // The Log has two columns of its own — tabs and the open tab —
+                // and nothing in it is about the day on the timeline.
+                logPane
             } else {
                 HSplitView {
                     centerPane
@@ -157,7 +166,16 @@ struct RootView: View {
             SettingsPaneView()
         case .categories:
             CategoryBreakdownView(day: model.selectedDate)
+        case .log:
+            logPane
         }
+    }
+
+    private var logPane: some View {
+        LogPaneView(onStartSession: { tabID in
+            startSessionTabID = tabID
+            isStartingSession = true
+        })
     }
 
     private func timeline(for day: Date) -> some View {
