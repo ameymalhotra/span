@@ -301,7 +301,14 @@ struct DayTimelineView: View {
                 } else if let session = editingSession {
                     SessionEditor(session: session, model: model) { editingSession = nil }
                 } else if let block = selection {
-                    TimelineBlockDetail(block: block) { selection = nil }
+                    if let record = breakRecord(for: block) {
+                        TimelineBlockDetail(block: block, onDelete: {
+                            selection = nil
+                            model.deleteBreak(record)
+                        }, onClose: { selection = nil })
+                    } else {
+                        TimelineBlockDetail(block: block) { selection = nil }
+                    }
                 }
             }
             .frame(width: panelWidth, alignment: .topLeading)

@@ -101,7 +101,10 @@ struct FocusPips: View {
 /// Popover shown when a block is clicked.
 struct TimelineBlockDetail: View {
     let block: TimelineBlock
+    var onDelete: (() -> Void)? = nil
     let onClose: () -> Void
+
+    @State private var isConfirmingDelete = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -137,6 +140,22 @@ struct TimelineBlockDetail: View {
             }
             if let rating = block.focusRating {
                 LabeledContent("Focus", value: "\(rating) of 5")
+            }
+            if let onDelete {
+                Divider()
+                Button(role: .destructive) {
+                    isConfirmingDelete = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("timeline.break.delete")
+                .confirmationDialog("Delete this break?", isPresented: $isConfirmingDelete) {
+                    Button("Delete break", role: .destructive, action: onDelete)
+                    Button("Keep it", role: .cancel) {}
+                } message: {
+                    Text("This break will be removed from the timeline. If it is running, its timer will stop. This cannot be undone.")
+                }
             }
         }
         .font(Theme.Font.body)

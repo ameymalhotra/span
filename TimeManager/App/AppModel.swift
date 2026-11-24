@@ -523,6 +523,15 @@ final class AppModel {
         refreshStats()
     }
 
+    /// Removes a break from the timeline. Deleting a running break cancels
+    /// its countdown too, but does not assume the user is back at work.
+    func deleteBreak(_ record: BreakRecord) {
+        if isRunningBreak(record) { clearBreak(resumingWork: false) }
+        context.delete(record)
+        save()
+        refreshStats()
+    }
+
     private func clearBreak(resumingWork: Bool, at date: Date = .now) {
         closeRunningBreak(at: date)
         breakEndsAt = nil
