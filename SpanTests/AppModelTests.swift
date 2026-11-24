@@ -683,6 +683,58 @@ struct AppModelTests {
         #expect(model.breakRemaining(at: now) == 60)
     }
 
+    @Test("deleting a past break leaves the running break alone")
+    func deletingAPastBreak() throws {
+        let now = Date.now
+        let past = BreakRecord(startedAt: now.addingTimeInterval(-600), plannedEnd: now)
+        past.endedAt = now
+        context.insert(past)
+        model.startBreak(minutes: 10, at: now)
+        let end = model.breakEndsAt
+
+        model.deleteBreak(past)
+
+        let records = try context.fetch(FetchDescriptor<BreakRecord>())
+        #expect(records.count == 1)
+        #expect(model.isRunningBreak(try #require(records.first)))
+        #expect(model.breakEndsAt == end)
+        model.endBreak()
+    }
+
+    @Test("deleting a running break cancels it without resuming paused work")
+    func deletingARunningBreak() throws {
+        let session = try #require(model.startSession(title: "Work", category: "Study", minutes: 60))
+        model.startBreak(minutes: 10)
+        let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
+
+        model.deleteBreak(record)
+
+        #expect(!model.isOnBreak)
+        #expect(model.breakEndsAt == nil)
+        #expect(model.breakLength == 0)
+        #expect(model.breakRemaining() == 0)
+        #expect(!model.sessionPausedForBreak)
+        #expect(!model.isRunningBreak(record))
+        #expect(session.status == .paused)
+        #expect(model.activeSession?.id == session.id)
+        let records = try context.fetch(FetchDescriptor<BreakRecord>())
+        #expect(records.isEmpty)
+        model.finishSession()
+    }
+
+    @Test("deleting a standalone running break leaves no timer or record")
+    func deletingAStandaloneBreak() throws {
+        model.startBreak(minutes: 10)
+        let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
+        model.deleteBreak(record)
+        model.finishBreakIfDue(at: .now.addingTimeInterval(3600))
+
+        #expect(!model.isOnBreak)
+        #expect(model.activeSession == nil)
+        let records = try context.fetch(FetchDescriptor<BreakRecord>())
+        #expect(records.isEmpty)
+    }
+
     @Test("ending a break nobody started is harmless")
     func endingABreakThatIsNotRunning() {
         model.endBreak()
