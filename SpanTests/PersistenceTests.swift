@@ -197,16 +197,37 @@ struct PersistenceTests {
         try TestStore.withTemporaryDirectory { directory in
             let url = directory.appendingPathComponent("Old.store")
             do {
-                let old = Schema([WorkSession.self, SessionSegment.self, ActivityRecord.self,
+                let old = Schema([PreLogSchema.WorkSession.self, PreLogSchema.SessionSegment.self, ActivityRecord.self,
                                   TimeEntry.self, BreakRecord.self, TimeCategory.self,
                                   AppCategoryRule.self])
                 let container = try ModelContainer(for: old, configurations: ModelConfiguration(url: url))
+                let session = PreLogSchema.WorkSession(title: "Old session", startedAt: Clock.at(hour: 9))
+                session.category = "Research"
+                session.endedAt = Clock.at(hour: 10)
+                session.statusRaw = "completed"
+                session.reflection = "Keep these notes"
+                session.reflectionStateRaw = "completed"
+                container.mainContext.insert(session)
+                let segment = PreLogSchema.SessionSegment(startedAt: Clock.at(hour: 9),
+                                                          endedAt: Clock.at(hour: 10), session: session)
+                container.mainContext.insert(segment)
+                session.segments.append(segment)
                 container.mainContext.insert(TimeEntry(title: "Walk", startedAt: Clock.at(hour: 12),
                                                        endedAt: Clock.at(hour: 13)))
                 try container.mainContext.save()
             }
             let reopened = try TestStore.onDisk(at: url)
             let context = reopened.mainContext
+            let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+            let session = try #require(sessions.first)
+            #expect(sessions.count == 1)
+            #expect(session.title == "Old session")
+            #expect(session.category == "Research")
+            #expect(session.reflection == "Keep these notes")
+            #expect(session.logTabID == nil)
+            #expect(session.segments.count == 1)
+            #expect(session.segments.first?.session?.id == session.id)
+            #expect(session.elapsed() == Clock.hours(1))
             #expect(try context.fetch(FetchDescriptor<TimeEntry>()).count == 1)
             #expect(try context.fetch(FetchDescriptor<LogTab>()).isEmpty)
             context.insert(LogTab(name: "Course"))
@@ -216,6 +237,66 @@ struct PersistenceTests {
     }
 
     // MARK: - Other models
+
+    /// A real read-only store makes save fail without touching permissions,
+    /// the user's store, or a mock that merely repeats the implementation.
+    private func withReadOnlyLog(_ body: (ModelContext, LogTab, LogEntry) throws -> Void) throws {
+        try TestStore.withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("ReadOnly.store")
+            do {
+                let writable = try TestStore.onDisk(at: url)
+                let tab = try #require(try LogBook.createTab(name: "Research", in: writable.mainContext))
+                try LogBook.addEntry(to: tab, resumePoint: "Keep me", done: "", in: writable.mainContext)
+            }
+            let container = try ModelContainer(for: ModelStack.schema,
+                configurations: ModelConfiguration(url: url, allowsSave: false))
+            let context = container.mainContext
+            context.autosaveEnabled = false
+            let tab = try #require(try context.fetch(FetchDescriptor<LogTab>()).first)
+            let entry = try #require(tab.entries.first)
+            try body(context, tab, entry)
+        }
+    }
+
+    @Test("a failed entry deletion restores the entry and its tab relationship")
+    func failedEntryDeletion() throws {
+        try withReadOnlyLog { context, tab, entry in
+            #expect(throws: (any Error).self) { try LogBook.delete(entry, in: context) }
+            #expect(tab.entries.count == 1)
+            #expect(entry.tab?.id == tab.id)
+            #expect(entry.resumePoint == "Keep me")
+            #expect(!context.hasChanges)
+        }
+    }
+
+    @Test("a failed tab deletion restores its history")
+    func failedTabDeletion() throws {
+        try withReadOnlyLog { context, _, _ in
+            let tab = try #require(try context.fetch(FetchDescriptor<LogTab>()).first)
+            #expect(throws: (any Error).self) { try LogBook.delete(tab, in: context) }
+            let tabs = try context.fetch(FetchDescriptor<LogTab>())
+            let entries = try context.fetch(FetchDescriptor<LogEntry>())
+            #expect(tabs.count == 1)
+            #expect(entries.count == 1)
+            #expect(tabs.first?.entries.count == 1)
+            #expect(!context.hasChanges)
+        }
+    }
+
+    @Test("retrying a failed log save does not accumulate unsaved duplicate entries")
+    func failedEntrySaveCanBeRetried() throws {
+        try withReadOnlyLog { context, tab, _ in
+            for _ in 0..<2 {
+                #expect(throws: (any Error).self) {
+                    try LogBook.addEntry(to: tab, resumePoint: "New draft", done: "", in: context)
+                }
+                let entries = try context.fetch(FetchDescriptor<LogEntry>())
+                #expect(entries.count == 1)
+                #expect(tab.entries.count == 1)
+                #expect(!context.hasChanges)
+            }
+        }
+    }
 
     @Test("a hand-written entry round-trips")
     func entryRoundTrip() throws {

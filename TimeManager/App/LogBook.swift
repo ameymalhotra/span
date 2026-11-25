@@ -46,6 +46,29 @@ enum LogBook {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// A failed write must not stay pending for autosave, or a retry could
+    /// duplicate an entry and a failed deletion could disappear later anyway.
+    /// Log forms hold their text in drafts, outside the context's rollback.
+    private static func persist(in context: ModelContext) throws {
+        do { try context.save() }
+        catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    private enum WriteError: LocalizedError {
+        case readOnly
+        var errorDescription: String? { "This Log store is read-only. Your changes have not been saved." }
+    }
+
+    /// SwiftData rejects a read-only save before processing its pending
+    /// changes; rollback then cannot reliably restore the relationship cache.
+    /// Refuse the mutation before changing any model in that case.
+    private static func requireWritable(in context: ModelContext) throws {
+        guard context.container.configurations.allSatisfy(\.allowsSave) else { throw WriteError.readOnly }
+    }
+
     // MARK: - Tabs
 
     /// Creates a tab at the end of the list, in a colour the other tabs are
@@ -67,16 +90,18 @@ enum LogBook {
             sortIndex: (existing.map(\.sortIndex).max() ?? -1) + 1,
             createdAt: date
         )
+        try requireWritable(in: context)
         context.insert(tab)
-        try context.save()
+        try persist(in: context)
         return tab
     }
 
     static func rename(_ tab: LogTab, to name: String, in context: ModelContext) throws {
         let trimmed = clean(name)
         guard !trimmed.isEmpty, trimmed != tab.name else { return }
+        try requireWritable(in: context)
         tab.name = trimmed
-        try context.save()
+        try persist(in: context)
     }
 
     /// Puts a tab under a heading — an existing one, a new one, or none. It
@@ -85,9 +110,10 @@ enum LogBook {
         let existing = try allTabs(in: context)
         let target = canonicalGroup(group, among: existing.filter { $0.id != tab.id })
         guard target != tab.group else { return }
+        try requireWritable(in: context)
         tab.group = target
         tab.sortIndex = (existing.map(\.sortIndex).max() ?? -1) + 1
-        try context.save()
+        try persist(in: context)
     }
 
     /// Renames a heading, which moves every tab under it. Renaming onto an
@@ -98,14 +124,16 @@ enum LogBook {
         let tabs = try allTabs(in: context)
         let others = tabs.filter { $0.group != from }
         let target = canonicalGroup(new, among: others)
+        try requireWritable(in: context)
         for tab in tabs where tab.group == from {
             tab.group = target
         }
-        try context.save()
+        try persist(in: context)
     }
 
     static func setArchived(_ tab: LogTab, _ archived: Bool, in context: ModelContext) throws {
         guard tab.isArchived != archived else { return }
+        try requireWritable(in: context)
         tab.isArchived = archived
         if !archived {
             // Back at the end of its section rather than wherever it used to
@@ -113,22 +141,24 @@ enum LogBook {
             let existing = try allTabs(in: context)
             tab.sortIndex = (existing.map(\.sortIndex).max() ?? -1) + 1
         }
-        try context.save()
+        try persist(in: context)
     }
 
     static func setColor(_ tab: LogTab, slot: Int, in context: ModelContext) throws {
+        try requireWritable(in: context)
         tab.colorSlot = slot
-        try context.save()
+        try persist(in: context)
     }
 
     /// Deletes a tab and every entry in it.
     static func delete(_ tab: LogTab, in context: ModelContext) throws {
+        try requireWritable(in: context)
         // Deleted explicitly as well as by the cascade: an in-memory store
         // does not always run the cascade before the next fetch, and a
         // stranded entry with no tab would be invisible but still on disk.
         for entry in tab.entries { context.delete(entry) }
         context.delete(tab)
-        try context.save()
+        try persist(in: context)
     }
 
     /// Reorders the tabs of one section. The section's tabs swap the sort
@@ -139,6 +169,7 @@ enum LogBook {
         toOffset destination: Int,
         in context: ModelContext
     ) throws {
+        try requireWritable(in: context)
         var reordered = section
         reordered.move(fromOffsets: source, toOffset: destination)
         let slots = section.map(\.sortIndex).sorted()
@@ -151,7 +182,7 @@ enum LogBook {
             let base = slots.first ?? 0
             for (offset, tab) in reordered.enumerated() { tab.sortIndex = base + offset }
         }
-        try context.save()
+        try persist(in: context)
     }
 
     // MARK: - Reading tabs
@@ -250,6 +281,7 @@ enum LogBook {
         let resume = clean(resumePoint)
         let did = clean(done)
         guard !resume.isEmpty || !did.isEmpty else { return nil }
+        try requireWritable(in: context)
         let entry = LogEntry(tab: tab, recordedAt: date, resumePoint: resume, done: did)
         if let session {
             entry.sessionID = session.id
@@ -258,7 +290,7 @@ enum LogBook {
         }
         context.insert(entry)
         tab.entries.append(entry)
-        try context.save()
+        try persist(in: context)
         return entry
     }
 
@@ -291,6 +323,7 @@ enum LogBook {
         let resume = clean(resumePoint)
         let did = clean(done)
         guard !resume.isEmpty || !did.isEmpty else { return false }
+        try requireWritable(in: context)
         entry.resumePoint = resume
         entry.done = did
         entry.recordedAt = recordedAt
@@ -300,14 +333,15 @@ enum LogBook {
             tab.entries.append(entry)
         }
         entry.editedAt = now
-        try context.save()
+        try persist(in: context)
         return true
     }
 
     static func delete(_ entry: LogEntry, in context: ModelContext) throws {
+        try requireWritable(in: context)
         entry.tab?.entries.removeAll { $0.id == entry.id }
         context.delete(entry)
-        try context.save()
+        try persist(in: context)
     }
 
     // MARK: - Reading entries
