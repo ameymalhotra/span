@@ -6,14 +6,12 @@ import SwiftUI
 /// stopped, a place to write the next entry, and everything written before.
 struct LogPaneView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppModel.self) private var model
     @Query(sort: \LogTab.sortIndex) private var tabs: [LogTab]
 
     /// The tab on screen, remembered across launches.
     @AppStorage("log.selectedTabID") private var selectedRaw = ""
-
-    /// Half-written entries, per tab, so switching tabs to check something
-    /// does not throw away what was being typed.
-    @State private var drafts: [UUID: LogDraft] = [:]
+    @State private var creationError: String?
 
     /// Opens the start sheet with this tab chosen.
     let onStartSession: (UUID) -> Void
@@ -36,8 +34,15 @@ struct LogPaneView: View {
         Group {
             if tabs.isEmpty {
                 LogEmptyState { name in
-                    if let tab = try? LogBook.createTab(name: name, in: context) {
-                        selection.wrappedValue = tab.id
+                    do {
+                        if let tab = try LogBook.createTab(name: name, in: context) {
+                            selection.wrappedValue = tab.id
+                            return true
+                        }
+                        return false
+                    } catch {
+                        creationError = error.localizedDescription
+                        return false
                     }
                 }
             } else {
@@ -49,8 +54,8 @@ struct LogPaneView: View {
                         LogTabDetail(
                             tab: tab,
                             draft: Binding(
-                                get: { drafts[tab.id] ?? LogDraft(tabID: tab.id) },
-                                set: { drafts[tab.id] = $0 }
+                                get: { model.logDrafts[tab.id] ?? LogDraft(tabID: tab.id) },
+                                set: { model.logDrafts[tab.id] = $0 }
                             ),
                             onStartSession: { onStartSession(tab.id) }
                         )
@@ -67,11 +72,21 @@ struct LogPaneView: View {
         .background(Theme.canvas)
         .onAppear(perform: ensureSelection)
         .onChange(of: tabs.map(\.id)) { _, _ in ensureSelection() }
+        .alert("Couldn't create tab", isPresented: Binding(
+            get: { creationError != nil },
+            set: { if !$0 { creationError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(creationError ?? "")
+        }
     }
 
     /// Keeps a tab on screen: the remembered one if it still exists, else the
     /// first active one.
     private func ensureSelection() {
+        let ids = Set(tabs.map(\.id))
+        model.logDrafts = model.logDrafts.filter { ids.contains($0.key) }
         if selectedTab != nil { return }
         let first = LogBook.sections(tabs).first?.tabs.first ?? tabs.first
         selection.wrappedValue = first?.id
@@ -82,7 +97,7 @@ struct LogPaneView: View {
 
 /// The first thing anyone sees in the Log, before there is a tab.
 private struct LogEmptyState: View {
-    let onCreate: (String) -> Void
+    let onCreate: (String) -> Bool
     @State private var name = ""
 
     private static let suggestions = ["Research", "Internship", "Business"]
@@ -118,7 +133,7 @@ private struct LogEmptyState: View {
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.tertiaryLabel)
                 ForEach(Self.suggestions, id: \.self) { suggestion in
-                    Button(suggestion) { onCreate(suggestion) }
+                    Button(suggestion) { _ = onCreate(suggestion) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
@@ -131,7 +146,7 @@ private struct LogEmptyState: View {
     private func create() {
         let trimmed = LogBook.clean(name)
         guard !trimmed.isEmpty else { return }
-        onCreate(trimmed)
+        guard onCreate(trimmed) else { return }
         name = ""
     }
 }
@@ -224,10 +239,12 @@ private struct LogSidebar: View {
             .accessibilityIdentifier("log.newTab")
             .popover(isPresented: $isCreating, arrowEdge: .top) {
                 LogTabCreator(groups: groups) { name, group in
-                    if let tab = try? LogBook.createTab(name: name, group: group, in: context) {
-                        selection = tab.id
-                    }
-                    isCreating = false
+                    do {
+                        if let tab = try LogBook.createTab(name: name, group: group, in: context) {
+                            selection = tab.id
+                        }
+                        isCreating = false
+                    } catch { self.error = error.localizedDescription }
                 }
             }
         }
@@ -437,7 +454,6 @@ private struct LogTabDetail: View {
     @Binding var draft: LogDraft
     let onStartSession: () -> Void
 
-    @AppStorage("log.lastTabID") private var lastLogTabRaw = ""
     @State private var savedFlash = false
     @State private var copiedFlash = false
     @State private var saveError: String?
@@ -478,11 +494,23 @@ private struct LogTabDetail: View {
             set: { if !$0 { pendingDelete = nil } }
         ), presenting: pendingDelete) { entry in
             Button("Delete Entry", role: .destructive) {
-                try? LogBook.delete(entry, in: context)
+                do {
+                    try LogBook.delete(entry, in: context)
+                } catch {
+                    saveError = "Not deleted: \(error.localizedDescription)"
+                }
                 pendingDelete = nil
             }
         } message: { entry in
             Text("From \(Format.logStamp(entry.recordedAt)). This cannot be undone.")
+        }
+        .alert("Couldn't save", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "")
         }
     }
 
@@ -540,7 +568,10 @@ private struct LogTabDetail: View {
             Text("Archived. Its history is kept; it's hidden from the session and menu bar pickers.")
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
-            Button("Unarchive") { try? LogBook.setArchived(tab, false, in: context) }
+            Button("Unarchive") {
+                do { try LogBook.setArchived(tab, false, in: context) }
+                catch { saveError = "Not saved: \(error.localizedDescription)" }
+            }
         }
         .font(Theme.Font.caption)
         .foregroundStyle(Theme.secondaryLabel)
@@ -592,11 +623,12 @@ private struct LogTabDetail: View {
     private func save() {
         guard draft.hasText else { return }
         do {
-            try LogBook.addEntry(to: tab, resumePoint: draft.resumePoint, done: draft.done,
-                                 session: linkedSession, in: context)
+            guard try model.saveLogDraft(draft, session: linkedSession) != nil else {
+                saveError = "Choose an active tab before saving. Your text has been kept."
+                return
+            }
             draft.clearText()
             saveError = nil
-            lastLogTabRaw = tab.id.uuidString
             flash(.savedFlash)
         } catch {
             // The text stays in the fields, so nothing typed is lost.

@@ -85,8 +85,12 @@ struct LogEntryEditor: View {
         }
         .confirmationDialog("Delete this entry?", isPresented: $confirmingDelete) {
             Button("Delete Entry", role: .destructive) {
-                try? LogBook.delete(entry, in: context)
-                dismiss()
+                do {
+                    try LogBook.delete(entry, in: context)
+                    dismiss()
+                } catch {
+                    saveError = "Not deleted: \(error.localizedDescription)"
+                }
             }
         } message: {
             Text("This cannot be undone.")

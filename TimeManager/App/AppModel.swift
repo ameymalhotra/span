@@ -80,6 +80,10 @@ final class AppModel {
     /// closes — clicking away to check something must not lose the entry.
     var menuBarLogDraft = LogDraft()
 
+    /// Kept for the lifetime of the app, so visiting another destination or
+    /// closing a window does not throw away a tab's unfinished entry.
+    var logDrafts: [UUID: LogDraft] = [:]
+
     /// When the running break ends, if one is running.
     private(set) var breakEndsAt: Date?
     /// Pre-formatted, for the same reason as `sessionClock`.
@@ -137,6 +141,7 @@ final class AppModel {
     var idleClock: () -> TimeInterval = { IdleMonitor.idleInterval() }
 
     private let context: ModelContext
+    private let logPreferences: UserDefaults
     private var loop: Task<Void, Never>?
     /// The day boundary the last tick saw, so a rollover can be noticed.
     private var lastDayStart = Calendar.current.startOfDay(for: .now)
@@ -144,7 +149,8 @@ final class AppModel {
     /// are on screen, which is most of the time.
     private var fastConsumers = 0
 
-    init(container: ModelContainer) {
+    init(container: ModelContainer, logPreferences: UserDefaults = .standard) {
+        self.logPreferences = logPreferences
         // Deliberately the container's main context, the same one `@Query`
         // reads from. A private context would need its changes merged back
         // before any view noticed a session had started.
@@ -216,6 +222,7 @@ final class AppModel {
         }
         activeSession = nil
         clearBreak(resumingWork: false)
+        clearLogDrafts()
         ModelStack.resetEverything(in: context)
         tracker.isPaused = wasPaused
         refreshStats()
@@ -241,15 +248,47 @@ final class AppModel {
         clearBreak(resumingWork: false)
 
         let session = WorkSession(title: title, category: category, plannedMinutes: minutes)
-        session.logTabID = logTabID
+        session.logTabID = LogBook.activeTab(id: logTabID, in: context)?.id
         session.beginSegment()
         context.insert(session)
         save()
         activeSession = session
+        rememberLogTab(session.logTabID)
         NotificationService.requestAuthorizationIfUndetermined()
         NotificationService.scheduleEndReminder(for: session)
         refreshStats()
         return session
+    }
+
+    /// Every route that starts work or writes a handoff remembers the same
+    /// tab. An unlinked session leaves the last actual Log tab remembered.
+    private func rememberLogTab(_ id: UUID?) {
+        guard let id else { return }
+        logPreferences.set(id.uuidString, forKey: "log.lastTabID")
+    }
+
+    @discardableResult
+    func saveLogDraft(_ draft: LogDraft, session: WorkSession? = nil) throws -> LogEntry? {
+        let entry = try LogBook.save(draft, session: session, in: context)
+        rememberLogTab(entry?.tab?.id)
+        return entry
+    }
+
+    /// A new form follows the work running now. A form with text stays on its
+    /// chosen tab, even after the user switches sessions to check something.
+    func prepareMenuBarLogDraft() {
+        guard !menuBarLogDraft.hasText else { return }
+        let running = LogBook.activeTab(id: activeSession?.logTabID, in: context)
+        let lastID = logPreferences.string(forKey: "log.lastTabID").flatMap(UUID.init(uuidString:))
+        let last = LogBook.activeTab(id: lastID, in: context)
+        menuBarLogDraft.tabID = (running ?? last)?.id
+    }
+
+    /// Also called by reset. Separate so tests can verify transient state is
+    /// cleared without invoking the reset that removes real preferences.
+    func clearLogDrafts() {
+        menuBarLogDraft = LogDraft()
+        logDrafts = [:]
     }
 
     /// Turns a hand-made block into the session that is running now.

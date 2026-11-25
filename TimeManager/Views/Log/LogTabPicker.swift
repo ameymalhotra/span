@@ -41,6 +41,11 @@ struct LogTabPicker: View {
         .onAppear {
             if selection != nil && selected == nil { selection = nil }
         }
+        .onChange(of: selected?.id) { _, id in
+            // Another window can archive or delete the tab while this form
+            // is open. Correct the choice without clearing its typed text.
+            if selection != nil && id == nil { selection = nil }
+        }
     }
 
     private func tabItems(_ tabs: [LogTab]) -> some View {

@@ -5,6 +5,7 @@ import SwiftData
 struct ReflectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppModel.self) private var model
     let session: WorkSession
     /// How the session ended, so the sheet can account for one the user did not
     /// finish themselves.
@@ -29,7 +30,11 @@ struct ReflectionView: View {
     @State private var logDraft = LogDraft()
     @State private var logError: String?
 
-    private var showsLog: Bool { asksForLog && logTabs.contains { !$0.isArchived } }
+    /// Keep an unfinished handoff reachable even if its tab is archived in
+    /// another window or the prompt setting changes while the sheet is open.
+    private var showsLog: Bool {
+        logDraft.hasText || (asksForLog && logTabs.contains { !$0.isArchived })
+    }
 
     init(session: WorkSession, ending: SessionEnding = .byHand) {
         self.session = session
@@ -56,6 +61,14 @@ struct ReflectionView: View {
         .onAppear {
             // The tab the session was started for, if it is still around.
             if LogBook.activeTab(id: logDraft.tabID, in: logTabs) == nil { logDraft.tabID = nil }
+        }
+        .alert("Couldn't save", isPresented: Binding(
+            get: { logError != nil },
+            set: { if !$0 { logError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(logError ?? "")
         }
     }
 
@@ -161,9 +174,10 @@ struct ReflectionView: View {
                 resumePoint: $logDraft.resumePoint,
                 done: $logDraft.done,
                 focusOnAppear: logDraft.tabID != nil,
+                onSubmit: submitReview,
                 identifier: "reflection.log"
             )
-            .disabled(logDraft.tabID == nil)
+            .disabled(logDraft.tabID == nil && !logDraft.hasText)
             if let logError {
                 Label(logError, systemImage: "exclamationmark.triangle")
                     .font(Theme.Font.caption)
@@ -183,9 +197,16 @@ struct ReflectionView: View {
     /// Writes the handoff, if there is one. False when it could not be saved,
     /// so the sheet stays open with the text still in it.
     private func saveLog() -> Bool {
-        guard showsLog else { return true }
+        guard showsLog || logDraft.hasText else { return true }
         do {
-            try LogBook.save(logDraft, session: session, in: modelContext)
+            let entry = try model.saveLogDraft(logDraft, session: session)
+            guard !logDraft.hasText || entry != nil else {
+                logError = "Choose an active tab or clear the text before continuing. Your text has been kept."
+                return false
+            }
+            // The handoff is already on disk. A retry after the review fails
+            // to save must not create a second copy of it.
+            logDraft.clearText()
             return true
         } catch {
             logError = "Not saved: \(error.localizedDescription)"
@@ -205,16 +226,7 @@ struct ReflectionView: View {
 
             Spacer()
 
-            Button("Save") {
-                guard saveLog() else { return }
-                session.focusRating = focus
-                session.honestWorkMinutes = honestMinutes ?? maximumMinutes
-                session.distractions = distractions
-                let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                session.reflection = trimmed.isEmpty ? nil : trimmed
-                session.reflectionState = .completed
-                save()
-            }
+            Button("Save", action: submitReview)
             .accessibilityIdentifier("reflection.save")
             .keyboardShortcut(.defaultAction)
         }
@@ -240,7 +252,22 @@ struct ReflectionView: View {
     }
 
     private func save() {
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            logError = "Review not saved: \(error.localizedDescription)"
+        }
+    }
+
+    private func submitReview() {
+        guard saveLog() else { return }
+        session.focusRating = focus
+        session.honestWorkMinutes = honestMinutes ?? maximumMinutes
+        session.distractions = distractions
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        session.reflection = trimmed.isEmpty ? nil : trimmed
+        session.reflectionState = .completed
+        save()
     }
 }

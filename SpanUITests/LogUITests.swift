@@ -103,6 +103,53 @@ final class LogUITests: XCTestCase {
                       "the handoff written at the end of the session was lost")
     }
 
+    func testAnUnfinishedEntrySurvivesLeavingTheLog() {
+        span = SpanApp().launch()
+        makeTab("Research")
+        span.type("Read the next paragraph", into: field("log.resumePoint"))
+        span.type("Finished the introduction", into: field("log.done"))
+
+        span.select("focus")
+        span.select("log")
+
+        let resume = field("log.resumePoint")
+        resume.waitToAppear()
+        XCTAssertEqual(resume.value as? String, "Read the next paragraph")
+        XCTAssertEqual(field("log.done").value as? String, "Finished the introduction")
+        span.button("log.save").click()
+        XCTAssertTrue(span.app.staticTexts["log.resumeCard.text"].waitForExistence(timeout: 10))
+    }
+
+    func testTheReviewKeyboardShortcutSavesTheHandoff() {
+        span = SpanApp().launch()
+        makeTab("Research")
+        span.button("log.startSession").click()
+        span.button("startSession.start").waitToAppear()
+        span.button("startSession.start").click()
+        span.select("focus")
+        span.button("focus.finish").waitToAppear()
+        span.button("focus.finish").click()
+        span.type("Resume at the examples", into: field("reflection.log.resumePoint"))
+        span.app.typeKey(.return, modifierFlags: .command)
+        span.button("reflection.save").waitToVanish()
+        span.select("log")
+        XCTAssertTrue(span.app.staticTexts["Resume at the examples"].waitForExistence(timeout: 10))
+    }
+
+    func testWithNoTabsTheStartAndReviewHaveNoLogControls() {
+        span = SpanApp().launch()
+        span.button("focus.start").click()
+        span.textField("startSession.title").waitToAppear()
+        XCTAssertFalse(element("startSession.logTab").exists)
+        span.type("Unlinked work", into: span.textField("startSession.title"))
+        span.button("startSession.start").click()
+        span.button("focus.finish").waitToAppear()
+        span.button("focus.finish").click()
+        span.button("reflection.save").waitToAppear()
+        XCTAssertFalse(field("reflection.log.resumePoint").exists)
+        span.button("reflection.skip").click()
+    }
+
     func testWithThePromptOffTheReviewIsUnchanged() {
         span = SpanApp(defaults: ["log.promptAtSessionEnd": "NO"]).launch()
         makeTab("Vector DB course")

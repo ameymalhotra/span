@@ -130,7 +130,10 @@ struct MenuBarPanelView: View {
         .onAppear {
             model.beginFastUpdates()
             // A half-written entry reopens where it was left.
-            if model.menuBarLogDraft.hasText { isLogging = true }
+            if isLogging || model.menuBarLogDraft.hasText {
+                model.prepareMenuBarLogDraft()
+                isLogging = true
+            }
         }
         .onDisappear { model.endFastUpdates() }
     }
@@ -195,11 +198,7 @@ struct MenuBarPanelView: View {
     private func beginLogging() {
         savedTo = nil
         logError = nil
-        if LogBook.activeTab(id: model.menuBarLogDraft.tabID, in: logTabs) == nil {
-            // The running session's tab, else the last one used.
-            let running = LogBook.activeTab(id: model.activeSession?.logTabID, in: logTabs)
-            model.menuBarLogDraft.tabID = (running ?? lastLogTab)?.id
-        }
+        model.prepareMenuBarLogDraft()
         isLogging = true
     }
 
@@ -207,8 +206,7 @@ struct MenuBarPanelView: View {
         let draft = model.menuBarLogDraft
         guard let tab = LogBook.activeTab(id: draft.tabID, in: logTabs), draft.hasText else { return }
         do {
-            guard try LogBook.save(draft, session: linkedSession(for: tab), in: context) != nil else { return }
-            lastLogTabRaw = tab.id.uuidString
+            guard try model.saveLogDraft(draft, session: linkedSession(for: tab)) != nil else { return }
             model.menuBarLogDraft.clearText()
             logError = nil
             isLogging = false

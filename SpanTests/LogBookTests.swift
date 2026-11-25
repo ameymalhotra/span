@@ -294,7 +294,10 @@ struct LogBookTests {
     @Test("a session started for a tab remembers it")
     func sessionRemembersTab() throws {
         let course = try tab("Course")
-        let model = AppModel(container: container)
+        let name = "SpanTests.Log.\(UUID().uuidString)"
+        let preferences = try #require(UserDefaults(suiteName: name))
+        defer { preferences.removePersistentDomain(forName: name) }
+        let model = AppModel(container: container, logPreferences: preferences)
         model.idleClock = { 0 }
         let session = model.startSession(title: "Lab", category: "Learning", minutes: 25,
                                          logTabID: course.id)

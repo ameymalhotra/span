@@ -117,7 +117,6 @@ struct StartSessionView: View {
                 Spacer()
                 Button("Start") {
                     let tabID = logTab?.id
-                    if hasLogTabs { lastLogTabRaw = tabID?.uuidString ?? "" }
                     onStart(trimmedTitle, category.trimmingCharacters(in: .whitespacesAndNewlines),
                             minutes, tabID)
                     dismiss()
