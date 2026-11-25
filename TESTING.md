@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-384 unit tests in 20 suites, about two seconds (excluding build and launch).
+396 unit tests in 21 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
@@ -69,7 +69,9 @@ themselves — anything that steals focus mid-test fails that test.
 Onboarding and its five steps, every sidebar destination, the keyboard
 shortcuts (⌘N ⌘B ⌘T ⌘[ ⌘]), day navigation and the date popover, the session
 lifecycle through to the review sheet, block creation, renaming, deletion and
-persistence across a relaunch, and the settings and category surfaces.
+persistence across a relaunch, and the settings and category surfaces. The Log cases cover creating and saving
+entries, relaunch persistence, session handoffs, drafts across navigation, the
+review keyboard shortcut, and the zero-tab state.
 
 The menu bar panel and the HUD are not covered: both live outside the app's
 main window and are impractical to address reliably from XCUITest.
