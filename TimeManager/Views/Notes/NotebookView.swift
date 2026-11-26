@@ -31,27 +31,33 @@ struct NotebookView: View {
                 }
                 .padding(12)
                 Divider()
-                List(selection: $selectedID) {
-                    ForEach(notes) { note in
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text(note.displayTitle).fontWeight(.medium).lineLimit(1)
-                                if note.isPinned { Image(systemName: "pin.fill").font(.caption2) }
+                ScrollViewReader { reader in
+                    List(selection: $selectedID) {
+                        ForEach(notes) { note in
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Text(note.displayTitle).fontWeight(.medium).lineLimit(1)
+                                    if note.isPinned { Image(systemName: "pin.fill").font(.caption2) }
+                                }
+                                Text(note.plainText.isEmpty ? "No text yet" : note.plainText)
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                Text(note.editedAt, style: .relative).font(.caption2).foregroundStyle(.tertiary)
                             }
-                            Text(note.plainText.isEmpty ? "No text yet" : note.plainText)
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            Text(note.editedAt, style: .relative).font(.caption2).foregroundStyle(.tertiary)
+                            .padding(.vertical, 5)
+                            .tag(note.id)
+                            .id(note.id)
+                            .accessibilityIdentifier("notes.row")
                         }
-                        .padding(.vertical, 5)
-                        .tag(note.id)
-                        .accessibilityIdentifier("notes.row")
                     }
-                }
-                .overlay {
-                    if notes.isEmpty {
-                        ContentUnavailableView(query.isEmpty ? "Your project notebook" : "No matching notes",
-                                               systemImage: "note.text",
-                                               description: Text(query.isEmpty ? "Keep ideas and reference material here." : "Try another word."))
+                    .overlay {
+                        if notes.isEmpty {
+                            ContentUnavailableView(query.isEmpty ? "Your project notebook" : "No matching notes",
+                                                   systemImage: "note.text",
+                                                   description: Text(query.isEmpty ? "Keep ideas and reference material here." : "Try another word."))
+                        }
+                    }
+                    .onChange(of: selectedID) { _, id in
+                        if let id { reader.scrollTo(id, anchor: .top) }
                     }
                 }
                 Button("Find Notes") { searching = true }

@@ -26,7 +26,7 @@ final class NotebookUITests: XCTestCase {
         editor.waitToAppear()
         span.type(text, into: editor)
         span.app.typeKey("s", modifierFlags: .command)
-        let status = span.app.staticTexts["notes.status"]
+        let status = span.app.descendants(matching: .any)["notes.status"]
         let saved = NSPredicate(format: "label == 'Saved' OR value == 'Saved'")
         expectation(for: saved, evaluatedWith: status)
         waitForExpectations(timeout: 10)
@@ -49,8 +49,10 @@ final class NotebookUITests: XCTestCase {
         createNote(title: "Paper ideas", text: "Vector databases")
         createNote(title: "Course", text: "Probability exercises")
         span.type("Vector", into: span.textField("notes.search"))
-        XCTAssertTrue(span.app.staticTexts["Paper ideas"].waitForExistence(timeout: 10))
-        XCTAssertFalse(span.app.staticTexts["Course"].exists)
+        let paper = span.app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Paper ideas")).firstMatch
+        let course = span.app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Course")).firstMatch
+        XCTAssertTrue(paper.waitForExistence(timeout: 10))
+        XCTAssertFalse(course.exists)
     }
 
     func testRelatedNoteOpensInASeparateWindow() {
