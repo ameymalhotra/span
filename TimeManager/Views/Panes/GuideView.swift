@@ -78,7 +78,8 @@ struct GuideView: View {
 
     private var blocks: some View {
         card("Adding time by hand", "For work that happened away from the Mac, or that tracking got wrong.") {
-            bullet("Drag anywhere on the timeline's wide lane to sweep out a block. It snaps to five minutes, and opens for naming as soon as you let go.")
+            bullet("Double-click empty timeline space to add a half-hour block there, rounded to five minutes. Or drag in the wide lane to choose its exact length; the editor opens when you let go.")
+            bullet("Right-click empty space to add a block, or an existing block for Edit and Delete. Escape closes the inspector.")
             bullet("Moving a block or dragging one of its edges works to the minute, and takes effect when you let go rather than as you drag.")
             bullet("Drag a block's middle to move it. Hover near its top or bottom edge and a grip appears — drag that to change when it started or ended.")
             bullet("Open a block to set exact start and end times, so you are never stuck with wherever the drag landed.")
@@ -171,6 +172,10 @@ struct GuideView: View {
                 shortcut("⌘T", "Jump to today")
                 shortcut("⌘[  ⌘]", "Previous or next day")
                 shortcut("⌘,", "Settings")
+                shortcut("⌘N in Notes", "New note")
+                shortcut("⌘F in Notes", "Search notes; find text in a separate note window")
+                shortcut("⌘B  ⌘I", "Bold or italic in a note")
+                shortcut("⌘K  ⌘S", "Add a link or save a note")
             }
         }
     }

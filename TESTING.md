@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-418 unit tests in 23 suites, about two seconds (excluding build and launch).
+428 unit tests in 23 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
@@ -74,12 +74,18 @@ persistence across a relaunch, and the settings and category surfaces. The Log c
 entries, relaunch persistence, session handoffs, drafts across navigation, the
 review keyboard shortcut, and the zero-tab state. Notebook cases cover writing
 and reopening notes, searching contents, linked notes, and separate-window reuse.
-These notebook UI cases have been compiled but require stable signing to run.
+Notebook and timeline gesture UI cases have been compiled but require stable
+signing to run. Timeline cases also cover double-click creation and opening,
+right-click creation, and Escape. Log cases verify that Start Session keeps the
+project it was opened from.
 
 Notebook unit tests cover rich-text and checklist round trips, native formatting
 and undo/redo, shared drafts, autosave and failure recovery, search and pinning,
 entry links, deletion rules, read-only stores, and migration from a frozen 1.9
-schema. All stores and preferences used by these tests are disposable.
+schema. Additional cases cover click-to-create snapping at different zooms,
+midnight and DST boundaries, inspector placement inside the viewport, and
+session deletion with active timers and linked writing. All stores and
+preferences used by these tests are disposable.
 
 The menu bar panel and the HUD are not covered: both live outside the app's
 main window and are impractical to address reliably from XCUITest.

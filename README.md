@@ -15,7 +15,7 @@ genuinely work.
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-1D1D1F?style=flat-square&logo=apple&logoColor=white)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-native-2C6FD6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-418%20passing-1F8A4C?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-428%20passing-1F8A4C?style=flat-square)
 ![Local only](https://img.shields.io/badge/data-stays%20on%20your%20Mac-8A46CE?style=flat-square)
 ![MIT](https://img.shields.io/badge/licence-MIT-C25E12?style=flat-square)
 
@@ -64,7 +64,7 @@ notarization. Until then, this is the cost of installing it.
 
 </details>
 
-**Requires macOS 14 (Sonoma) or later · Apple Silicon**
+**Requires macOS 14 (Sonoma) or later · Apple Silicon or Intel**
 
 ---
 
@@ -119,8 +119,9 @@ Two tracks. A narrow **rail** shows what your Mac was doing, as one continuous
 band coloured by category. A wide **lane** holds your sessions and the blocks
 you add by hand.
 
-Drag empty space to sweep out a block — it snaps to five minutes and opens for
-naming. Drag a block to move it, or its edges to change when it started or
+Double-click empty timeline space to add a half-hour block at that time, or
+drag to choose its length. Right-click for block actions; Escape closes the
+editor. Drag a block to move it, or its edges to change when it started or
 ended. Running sessions included.
 
 </td>
