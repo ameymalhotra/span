@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-428 unit tests in 23 suites, about two seconds (excluding build and launch).
+445 unit tests in 24 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
@@ -89,6 +89,12 @@ preferences used by these tests are disposable.
 
 The menu bar panel and the HUD are not covered: both live outside the app's
 main window and are impractical to address reliably from XCUITest.
+
+The timer lifecycle suite also verifies direct and cross-context deletions,
+stale controls and reviews, paused reminders, break/resume transitions, and
+preserving the current timer when historical work is changed. The session UI
+suite includes deleting the running timeline session and starting new work;
+this case compiles but still requires stable signing to execute.
 
 ## What is not tested
 
