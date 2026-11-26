@@ -15,7 +15,7 @@ genuinely work.
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-1D1D1F?style=flat-square&logo=apple&logoColor=white)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-native-2C6FD6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-396%20passing-1F8A4C?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-418%20passing-1F8A4C?style=flat-square)
 ![Local only](https://img.shields.io/badge/data-stays%20on%20your%20Mac-8A46CE?style=flat-square)
 ![MIT](https://img.shields.io/badge/licence-MIT-C25E12?style=flat-square)
 
@@ -102,6 +102,11 @@ you keep coming back to a tab — grouped under headings if you like — and wri
 where to pick up next time and what got done. The latest resume point greets
 you when you start a session for that tab, and the review sheet can ask for it
 when a session ends. The menu bar writes one with no timer at all.
+
+Each tab also has a **Notes** view for longer-lived ideas and reference material:
+formatted text, headings, lists, checklists, links, search, and pinned notes.
+Open a note in its own window while you work, or link it to a Log entry.
+Changes save automatically; notebooks stay local with the rest of your data.
 
 </td>
 </tr>
@@ -191,7 +196,7 @@ One file, on your Mac:
 
 Nothing you record is ever uploaded. **Settings → Your data** can delete the
 tracked activity on its own, or reset Span entirely — every session, block,
-category, Log entry and preference — and start the setup questions again. Both ask you to
+category, Log entry, project note and preference — and start the setup questions again. Both ask you to
 type a confirmation phrase first, because neither can be undone.
 
 The one thing Span sends anywhere is a **daily check against the GitHub releases

@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-396 unit tests in 21 suites, about two seconds (excluding build and launch).
+418 unit tests in 23 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
@@ -33,8 +33,9 @@ should be untouched and there should be no `Recovered-*.store` beside it.
 
 ## The UI tests need a stable code signature
 
-They are written and they work — but only while macOS trusts the app for
-automation, and it currently does not for long.
+UI tests are compiled alongside the unit tests. Running them requires macOS
+to trust the app for automation; the current ad-hoc signature does not retain
+that trust across builds.
 
 Span is unsandboxed and signed ad hoc (`CODE_SIGN_IDENTITY="-"`), so **every
 rebuild produces a new code signature**. macOS keys the Accessibility grant to
@@ -71,7 +72,14 @@ shortcuts (⌘N ⌘B ⌘T ⌘[ ⌘]), day navigation and the date popover, the s
 lifecycle through to the review sheet, block creation, renaming, deletion and
 persistence across a relaunch, and the settings and category surfaces. The Log cases cover creating and saving
 entries, relaunch persistence, session handoffs, drafts across navigation, the
-review keyboard shortcut, and the zero-tab state.
+review keyboard shortcut, and the zero-tab state. Notebook cases cover writing
+and reopening notes, searching contents, linked notes, and separate-window reuse.
+These notebook UI cases have been compiled but require stable signing to run.
+
+Notebook unit tests cover rich-text and checklist round trips, native formatting
+and undo/redo, shared drafts, autosave and failure recovery, search and pinning,
+entry links, deletion rules, read-only stores, and migration from a frozen 1.9
+schema. All stores and preferences used by these tests are disposable.
 
 The menu bar panel and the HUD are not covered: both live outside the app's
 main window and are impractical to address reliably from XCUITest.
