@@ -179,4 +179,24 @@ final class SessionFlowUITests: XCTestCase {
 
         hudButton.click()
     }
+
+    func testDeletingTheRunningTimelineSessionStopsItsTimerAndAllowsNewWork() {
+        span = SpanApp().launch()
+        span.startSession(title: "Delete running work")
+        let card = span.app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH %@", "timeline.block.session-"
+        )).firstMatch
+        card.waitToAppear()
+        card.rightClick()
+        span.app.menuItems["Delete…"].waitToAppear()
+        span.app.menuItems["Delete…"].click()
+        span.app.buttons["Delete"].waitToAppear()
+        span.app.buttons["Delete"].click()
+        span.button("focus.start").waitToAppear(10, "the record disappeared but its timer kept running")
+        XCTAssertFalse(span.button("focus.pause").exists)
+        XCTAssertFalse(span.button("reflection.save").exists)
+        span.startSession(title: "New work")
+        span.button("focus.pause").waitToAppear()
+    }
+
 }
