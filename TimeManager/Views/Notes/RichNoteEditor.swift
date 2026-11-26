@@ -7,6 +7,24 @@ import SwiftUI
 @Observable
 final class NoteFormatting {
     weak var textView: NSTextView?
+    var selectedColor: NSColor = .textColor
+
+    /// A selection changes in place, preserving its other formatting. With
+    /// just a caret, the colour belongs to whatever is typed next.
+    func textColor(_ color: NSColor?) {
+        guard let view = textView else { return }
+        view.window?.makeFirstResponder(view)
+        let ink = color?.usingColorSpace(.sRGB) ?? color ?? .textColor
+        selectedColor = ink
+        let range = view.selectedRange()
+        if range.length == 0 {
+            view.typingAttributes[.foregroundColor] = ink
+        } else if let storage = view.textStorage {
+            let text = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
+            text.addAttribute(.foregroundColor, value: ink, range: NSRange(location: 0, length: text.length))
+            Self.replace(in: view, range: range, with: text, selection: range)
+        }
+    }
 
     func find() {
         guard let view = textView else { return }
@@ -151,6 +169,7 @@ struct RichNoteEditor: NSViewRepresentable {
         view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.usesFindBar = true
         view.isRichText = true
+        view.usesAdaptiveColorMappingForDarkAppearance = true
         view.importsGraphics = false
         view.allowsImageEditing = false
         view.isAutomaticLinkDetectionEnabled = true
@@ -209,17 +228,35 @@ struct RichNoteEditor: NSViewRepresentable {
         init(_ parent: RichNoteEditor) { self.parent = parent }
 
         func load(_ data: Data, into view: NSTextView) {
-            let text = NSMutableAttributedString(attributedString: NoteBook.attributedText(data))
-            // No custom text colours in this editor: semantic colour keeps
-            // notes readable when opened in the other appearance.
-            text.addAttribute(.foregroundColor, value: NSColor.textColor, range: NSRange(location: 0, length: text.length))
+            // Keep chosen colours intact. The native text view adapts default
+            // ink for dark appearance instead of replacing every colour here.
+            let text = NoteBook.attributedText(data)
             view.textStorage?.setAttributedString(text)
             if text.length == 0 { view.typingAttributes = [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.textColor] }
             lastData = data
         }
 
+        private func publishSelectionColor(from view: NSTextView) {
+            let formatting = parent.formatting
+            // Loading another window's edit can change selection during a
+            // SwiftUI update. Read the latest colour on the next turn, so a
+            // queued selection event cannot undo a newer colour choice.
+            Task { @MainActor [weak formatting, weak view] in
+                guard let formatting, let view, formatting.textView === view else { return }
+                let color = view.typingAttributes[.foregroundColor] as? NSColor ?? .textColor
+                guard !formatting.selectedColor.isEqual(color) else { return }
+                formatting.selectedColor = color
+            }
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let view = notification.object as? NSTextView else { return }
+            publishSelectionColor(from: view)
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? NSTextView, let storage = view.textStorage else { return }
+            publishSelectionColor(from: view)
             do {
                 let data = try NoteBook.encode(storage)
                 lastData = data

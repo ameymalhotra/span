@@ -51,7 +51,10 @@ struct NotebookView: View {
                                 }
                                 Text(note.plainText.isEmpty ? "No text yet" : note.plainText)
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                Text(note.editedAt, style: .relative).font(.caption2).foregroundStyle(.tertiary)
+                                Text("Edited \(note.editedAt.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                                    .help("Last edited date and time")
                             }
                             .padding(.vertical, 5)
                             .tag(note.id)
@@ -191,6 +194,7 @@ struct ProjectNoteEditor: View {
         VStack(spacing: 0) {
             HStack {
                 Text(note.tab?.name ?? "Project unavailable").font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
                 Spacer()
                 if readOnly { Text("Archived · Read only").font(.caption).foregroundStyle(.secondary) }
                 else {
@@ -201,8 +205,10 @@ struct ProjectNoteEditor: View {
                         .accessibilityIdentifier("notes.status")
                 }
                 if !isSeparateWindow {
-                    Button { openWindow(value: note.id) } label: { Image(systemName: "arrow.up.forward.square") }
-                        .help("Open in Separate Window")
+                    Button { openWindow(value: note.id) } label: {
+                        Label("Open", systemImage: "arrow.up.forward.square")
+                    }
+                        .help("Open this note in a separate window")
                         .accessibilityLabel("Open in Separate Window")
                         .accessibilityIdentifier("notes.openWindow")
                 }
@@ -226,14 +232,27 @@ struct ProjectNoteEditor: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, 24).padding(.vertical, 12)
             .disabled(readOnly).focused($titleFocused).accessibilityIdentifier("notes.title")
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Button(action: formatting.bold) { Image(systemName: "bold") }.keyboardShortcut("b").help("Bold (⌘B)")
                 Button(action: formatting.italic) { Image(systemName: "italic") }.keyboardShortcut("i").help("Italic (⌘I)")
+                ColorPicker("Text colour", selection: Binding(
+                    get: { Color(nsColor: formatting.selectedColor) },
+                    set: { formatting.textColor(NSColor($0)) }
+                ), supportsOpacity: false)
+                .labelsHidden().controlSize(.small).fixedSize()
+                .help("Text colour: select text to recolour it, or choose before typing")
+                .accessibilityLabel("Text colour")
+                .accessibilityIdentifier("notes.textColor")
+                .contextMenu {
+                    Button("Automatic Text Colour") { formatting.textColor(nil) }
+                }
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
                         Menu("Style") {
                             Button("Heading") { formatting.heading(true) }
                             Button("Body") { formatting.heading(false) }
+                            Divider()
+                            Button("Automatic Text Colour") { formatting.textColor(nil) }
                         }
                         Menu {
                             Button("Bulleted List") { formatting.list(numbered: false) }
@@ -244,6 +263,7 @@ struct ProjectNoteEditor: View {
                     Menu("Format") {
                         Button("Heading") { formatting.heading(true) }
                         Button("Body") { formatting.heading(false) }
+                        Button("Automatic Text Colour") { formatting.textColor(nil) }
                         Divider()
                         Button("Bulleted List") { formatting.list(numbered: false) }
                         Button("Numbered List") { formatting.list(numbered: true) }

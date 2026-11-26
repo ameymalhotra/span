@@ -313,6 +313,77 @@ struct NotebookTests {
         #expect(view.string == "Heading")
     }
 
+
+    @Test("text colour applies only to the selection and survives editor reload")
+    func selectedTextColour() throws {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        view.isRichText = true
+        let url = try #require(URL(string: "https://example.com/paper"))
+        let text = NSMutableAttributedString(string: "Read paper", attributes: [
+            .foregroundColor: NSColor.textColor, .font: NSFont.boldSystemFont(ofSize: 16)
+        ])
+        text.addAttribute(.link, value: url, range: NSRange(location: 5, length: 5))
+        view.textStorage?.setAttributedString(text)
+        view.setSelectedRange(NSRange(location: 5, length: 5))
+        let formatting = NoteFormatting()
+        formatting.textView = view
+        formatting.textColor(NSColor(srgbRed: 0.8, green: 0.2, blue: 0.3, alpha: 1))
+        let storage = try #require(view.textStorage)
+        #expect((storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.isEqual(NSColor.textColor) == true)
+        #expect(storage.attribute(.link, at: 5, effectiveRange: nil) != nil)
+        #expect(view.selectedRange() == NSRange(location: 5, length: 5))
+
+        let container = try TestStore.inMemory()
+        let note = try NoteBook.create(in: project(container.mainContext), context: container.mainContext)
+        let editor = RichNoteEditor(document: NoteDocument(note),
+            editing: NoteEditingCoordinator(context: container.mainContext), formatting: NoteFormatting(), isEditable: true)
+        let restored = NSTextView(frame: view.frame)
+        editor.makeCoordinator().load(try NoteBook.encode(storage), into: restored)
+        let ink = try #require((restored.textStorage?.attribute(.foregroundColor, at: 5, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB))
+        #expect(abs(ink.redComponent - 0.8) < 0.01)
+        #expect(abs(ink.greenComponent - 0.2) < 0.01)
+        #expect(abs(ink.blueComponent - 0.3) < 0.01)
+        #expect(restored.string == "Read paper")
+        #expect(restored.textStorage?.attribute(.link, at: 5, effectiveRange: nil) != nil)
+    }
+
+    @Test("choosing a colour at the caret changes future typing and can reset to Automatic")
+    func typingColour() throws {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        view.isRichText = true
+        view.string = "Ideas"
+        view.setSelectedRange(NSRange(location: 5, length: 0))
+        let formatting = NoteFormatting()
+        formatting.textView = view
+        formatting.textColor(NSColor(srgbRed: 0.1, green: 0.3, blue: 0.8, alpha: 1))
+        let ink = try #require((view.typingAttributes[.foregroundColor] as? NSColor)?.usingColorSpace(.sRGB))
+        #expect(abs(ink.blueComponent - 0.8) < 0.01)
+        #expect(view.string == "Ideas")
+        formatting.textColor(nil)
+        #expect((view.typingAttributes[.foregroundColor] as? NSColor)?.isEqual(NSColor.textColor) == true)
+    }
+
+    @Test("text colour supports native undo and redo")
+    func colourUndo() throws {
+        let view = UndoableNoteTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        view.isRichText = true
+        view.textStorage?.setAttributedString(NSAttributedString(string: "Ideas", attributes: [.foregroundColor: NSColor.textColor]))
+        view.setSelectedRange(NSRange(location: 0, length: 5))
+        view.history.groupsByEvent = false
+        let formatting = NoteFormatting()
+        formatting.textView = view
+        view.history.beginUndoGrouping()
+        formatting.textColor(NSColor(srgbRed: 0.8, green: 0.2, blue: 0.3, alpha: 1))
+        view.history.endUndoGrouping()
+        view.history.undo()
+        let restored = try #require(view.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+        #expect(restored.isEqual(NSColor.textColor))
+        view.history.redo()
+        let redone = try #require((view.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.usingColorSpace(.sRGB))
+        #expect(abs(redone.redComponent - 0.8) < 0.01)
+        #expect(view.string == "Ideas")
+    }
+
 }
 
 
