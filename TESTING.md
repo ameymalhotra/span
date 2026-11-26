@@ -14,7 +14,7 @@ xcodebuild test -project TimeManager.xcodeproj -scheme TimeManager \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
 ```
 
-445 unit tests in 24 suites, about two seconds (excluding build and launch).
+448 unit tests in 24 suites, about two seconds (excluding build and launch).
 
 ## Nothing touches your real data
 
@@ -80,7 +80,7 @@ right-click creation, and Escape. Log cases verify that Start Session keeps the
 project it was opened from.
 
 Notebook unit tests cover rich-text and checklist round trips, native formatting
-and undo/redo, shared drafts, autosave and failure recovery, search and pinning,
+and undo/redo, text colours across reloads, shared drafts, autosave and failure recovery, search and pinning,
 entry links, deletion rules, read-only stores, and migration from a frozen 1.9
 schema. Additional cases cover click-to-create snapping at different zooms,
 midnight and DST boundaries, inspector placement inside the viewport, and

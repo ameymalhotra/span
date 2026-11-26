@@ -15,7 +15,7 @@ genuinely work.
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-1D1D1F?style=flat-square&logo=apple&logoColor=white)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-native-2C6FD6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-445%20passing-1F8A4C?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-448%20passing-1F8A4C?style=flat-square)
 ![Local only](https://img.shields.io/badge/data-stays%20on%20your%20Mac-8A46CE?style=flat-square)
 ![MIT](https://img.shields.io/badge/licence-MIT-C25E12?style=flat-square)
 
@@ -104,7 +104,7 @@ you when you start a session for that tab, and the review sheet can ask for it
 when a session ends. The menu bar writes one with no timer at all.
 
 Each tab also has a **Notes** view for longer-lived ideas and reference material:
-formatted text, headings, lists, checklists, links, search, and pinned notes.
+formatted text, text colours, headings, lists, checklists, links, search, and pinned notes.
 Open a note in its own window while you work, or link it to a Log entry.
 Changes save automatically; notebooks stay local with the rest of your data.
 
