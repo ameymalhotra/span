@@ -14,16 +14,24 @@ struct RelatedNotesPicker: View {
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(NoteBook.ordered(tab.notes)) { note in
-                    HStack {
-                        Toggle(note.displayTitle, isOn: Binding(
-                            get: { selection.contains(note.id) },
-                            set: { if $0 { selection.insert(note.id) } else { selection.remove(note.id) } }
-                        ))
-                        .toggleStyle(.checkbox)
-                        Button { openWindow(value: note.id) } label: { Image(systemName: "arrow.up.forward.square") }
-                            .buttonStyle(.borderless).help("Open Note")
+                if !tab.notes.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(NoteBook.ordered(tab.notes)) { note in
+                                HStack {
+                                    Toggle(note.displayTitle, isOn: Binding(
+                                        get: { selection.contains(note.id) },
+                                        set: { if $0 { selection.insert(note.id) } else { selection.remove(note.id) } }
+                                    ))
+                                    .toggleStyle(.checkbox)
+                                    .lineLimit(1)
+                                    Button { openWindow(value: note.id) } label: { Image(systemName: "arrow.up.forward.square") }
+                                        .buttonStyle(.borderless).help("Open Note")
+                                }
+                            }
+                        }
                     }
+                    .frame(height: min(140, CGFloat(tab.notes.count) * 28))
                 }
                 Button("Create Linked Note…") {
                     do {

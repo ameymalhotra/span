@@ -8,6 +8,14 @@ import SwiftUI
 final class NoteFormatting {
     weak var textView: NSTextView?
 
+    func find() {
+        guard let view = textView else { return }
+        view.window?.makeFirstResponder(view)
+        let command = NSMenuItem()
+        command.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
+        view.performFindPanelAction(command)
+    }
+
     func bold() { toggle(.boldFontMask) }
     func italic() { toggle(.italicFontMask) }
 

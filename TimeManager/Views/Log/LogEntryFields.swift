@@ -28,7 +28,11 @@ struct LogEntryFields: View {
             TextField("", text: $resumePoint,
                       prompt: Text("Where to pick up next time"), axis: .vertical)
                 .accessibilityIdentifier("\(identifier).resumePoint")
+                .accessibilityLabel("Resume point / Things to do")
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(compact ? 1...4 : 2...6)
                 .focused($focus, equals: .resume)
                 .onSubmit { focus = .done }
@@ -38,7 +42,11 @@ struct LogEntryFields: View {
             TextField("", text: $done,
                       prompt: Text("Optional"), axis: .vertical)
                 .accessibilityIdentifier("\(identifier).done")
+                .accessibilityLabel("What was done in this session")
+                .labelsHidden()
                 .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(compact ? 1...4 : 2...8)
                 .focused($focus, equals: .done)
                 .onSubmit { onSubmit?() }

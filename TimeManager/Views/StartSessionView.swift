@@ -91,6 +91,7 @@ struct StartSessionView: View {
                     }
                     .accessibilityIdentifier("startSession.title")
                     .labelsHidden()
+                    .multilineTextAlignment(.leading)
                     CategoryPicker(selection: $category)
                     HStack(spacing: Theme.Space.xs) {
                         Circle()

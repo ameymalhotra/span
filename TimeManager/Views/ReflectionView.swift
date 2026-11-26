@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SwiftData
 
@@ -54,7 +55,7 @@ struct ReflectionView: View {
             Divider()
             footer
         }
-        .frame(width: 420)
+        .frame(width: 480)
         // No silent third exit: the sheet is dismissed by Save or by Skip, both
         // of which record what happened.
         .interactiveDismissDisabled()
@@ -122,6 +123,8 @@ struct ReflectionView: View {
                 HStack(spacing: Theme.Space.s) {
                     TextField("Minutes", text: $honestDraft, prompt: Text("Not set"))
                         .accessibilityIdentifier("reflection.honestMinutes")
+                        .labelsHidden()
+                        .multilineTextAlignment(.leading)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 72)
                         .onChange(of: honestDraft) { _, new in commitHonestMinutes(new) }
@@ -150,11 +153,15 @@ struct ReflectionView: View {
                     Text("Note")
                 }
                 .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("reflection.note")
                 .lineLimit(3...6)
             }
         }
         .formStyle(.grouped)
-        .frame(height: showsLog ? 560 : 340)
+        .frame(height: min(showsLog ? 500 : 340, max(240, (NSScreen.main?.visibleFrame.height ?? 800) - 200)))
     }
 
     /// First, because it is the part you will read again: where you stopped
@@ -178,6 +185,9 @@ struct ReflectionView: View {
                 identifier: "reflection.log"
             )
             .disabled(logDraft.tabID == nil && !logDraft.hasText)
+            if let tab = LogBook.activeTab(id: logDraft.tabID, in: logTabs) {
+                RelatedNotesPicker(tab: tab, selection: $logDraft.noteIDs)
+            }
             if let logError {
                 Label(logError, systemImage: "exclamationmark.triangle")
                     .font(Theme.Font.caption)

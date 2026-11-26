@@ -54,9 +54,13 @@ struct RootView: View {
     /// nothing for the divider and the panes overflow their slots.
     private static let minimumWidth: CGFloat = sidebarWidth + centreMinimum + timelineMinimum + 40
     private static let minimumHeight: CGFloat = 620
-    @State private var isStartingSession = false
-    /// The Log tab the start sheet opens with, when it was opened from a tab.
-    @State private var startSessionTabID: UUID?
+    /// The presentation and its project travel together. Two separate State
+    /// writes could open the sheet before its captured tab ID had updated.
+    private struct SessionStartRequest: Identifiable {
+        let id = UUID()
+        var tabID: UUID? = nil
+    }
+    @State private var sessionStartRequest: SessionStartRequest?
     @State private var isOfferingBreak = false
     @AppStorage("timeline.hourHeight") private var hourHeight: Double = 60
 
@@ -98,8 +102,8 @@ struct RootView: View {
             .environment(model)
             .interactiveDismissDisabled()
         }
-        .sheet(isPresented: $isStartingSession, onDismiss: { startSessionTabID = nil }) {
-            StartSessionView(preselectedLogTabID: startSessionTabID) { title, category, minutes, logTabID in
+        .sheet(item: $sessionStartRequest) { request in
+            StartSessionView(preselectedLogTabID: request.tabID) { title, category, minutes, logTabID in
                 model.startSession(title: title, category: category, minutes: minutes,
                                    logTabID: logTabID)
             }
@@ -154,7 +158,7 @@ struct RootView: View {
         switch destination {
         case .focus, .timeline:
             FocusPaneView(
-                onStart: { isStartingSession = true },
+                onStart: { sessionStartRequest = SessionStartRequest() },
                 onFinish: { model.finishSession() }
             )
         case .day:
@@ -174,8 +178,7 @@ struct RootView: View {
 
     private var logPane: some View {
         LogPaneView(onStartSession: { tabID in
-            startSessionTabID = tabID
-            isStartingSession = true
+            sessionStartRequest = SessionStartRequest(tabID: tabID)
         }, onNotebookVisibilityChange: { notebookVisible = $0 })
     }
 
@@ -233,7 +236,7 @@ struct RootView: View {
             .keyboardShortcut(notebookVisible ? nil : KeyboardShortcut("b", modifiers: .command))
 
             Button {
-                if model.activeSession == nil { isStartingSession = true }
+                if model.activeSession == nil { sessionStartRequest = SessionStartRequest() }
             } label: {
                 Label("Start Session", systemImage: "play.fill")
             }

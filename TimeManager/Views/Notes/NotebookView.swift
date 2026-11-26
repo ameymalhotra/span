@@ -5,9 +5,13 @@ import SwiftUI
 struct NotebookView: View {
     @Environment(\.modelContext) private var context
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     let tab: LogTab
     @State private var selectedID: UUID?
     @State private var query = ""
+    @State private var pendingDelete: ProjectNote?
+    @State private var renaming: ProjectNote?
+    @State private var renameTitle = ""
     @State private var error: String?
     @FocusState private var searching: Bool
 
@@ -22,6 +26,12 @@ struct NotebookView: View {
                         .textFieldStyle(.roundedBorder)
                         .focused($searching)
                         .accessibilityIdentifier("notes.search")
+                        .onExitCommand { query = ""; searching = false }
+                    if !query.isEmpty {
+                        Button { query = ""; searching = true } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.borderless).help("Clear Search")
+                            .accessibilityLabel("Clear Search")
+                    }
                     Button(action: create) { Image(systemName: "square.and.pencil") }
                         .help("New Note (⌘N)")
                         .keyboardShortcut("n")
@@ -47,7 +57,32 @@ struct NotebookView: View {
                             .tag(note.id)
                             .id(note.id)
                             .accessibilityIdentifier("notes.row")
+                            .onTapGesture(count: 2) { openWindow(value: note.id) }
+                            .contextMenu {
+                                Button("Open in Separate Window") { openWindow(value: note.id) }
+                                Button("Rename…") {
+                                    renameTitle = model.notebooks.document(for: note).title
+                                    renaming = note
+                                }.disabled(tab.isArchived)
+                                Button(note.isPinned ? "Unpin" : "Pin") { perform { try NoteBook.pin(note, in: context) } }
+                                    .disabled(tab.isArchived)
+                                Button("Copy as Text") {
+                                    let draft = model.notebooks.document(for: note)
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(draft.title + "\n\n" + draft.plainText, forType: .string)
+                                }
+                                Divider()
+                                Button("Delete Note…", role: .destructive) { pendingDelete = note }.disabled(tab.isArchived)
+                            }
                         }
+                    }
+                    .onKeyPress(.return) {
+                        guard let selected else { return .ignored }
+                        openWindow(value: selected.id)
+                        return .handled
+                    }
+                    .onDeleteCommand {
+                        if !tab.isArchived { pendingDelete = selected }
                     }
                     .overlay {
                         if notes.isEmpty {
@@ -61,7 +96,7 @@ struct NotebookView: View {
                     }
                 }
                 Button("Find Notes") { searching = true }
-                    .keyboardShortcut("f").hidden().frame(height: 0)
+                    .keyboardShortcut("f").frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
             }
             .frame(minWidth: 190, idealWidth: 230, maxWidth: 300)
             Group {
@@ -88,9 +123,42 @@ struct NotebookView: View {
         .onChange(of: tab.notes.map(\.id)) { _, ids in
             if let selectedID, !ids.contains(selectedID) { self.selectedID = notes.first?.id }
         }
-        .alert("Couldn’t create note", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .confirmationDialog("Delete this note?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button("Delete Note", role: .destructive) {
+                if let note = pendingDelete {
+                    perform {
+                        let id = note.id
+                        try NoteBook.delete(note, in: context)
+                        model.notebooks.forget(id)
+                    }
+                }
+                pendingDelete = nil
+            }
+        } message: { Text("The note and its links from Log entries will be removed. This cannot be undone.") }
+        .alert("Rename Note", isPresented: Binding(
+            get: { renaming != nil }, set: { if !$0 { renaming = nil } }
+        )) {
+            TextField("Title", text: $renameTitle)
+            Button("Cancel", role: .cancel) { renaming = nil }
+            Button("Rename") {
+                if let note = renaming {
+                    let draft = model.notebooks.document(for: note)
+                    draft.title = renameTitle
+                    model.notebooks.changed(draft)
+                    perform { try model.notebooks.flush(note.id) }
+                }
+                renaming = nil
+            }
+        }
+        .alert("Couldn’t update notebook", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(error ?? "") }
+    }
+
+    private func perform(_ action: () throws -> Void) {
+        do { try action() } catch { self.error = error.localizedDescription }
     }
 
     private func create() {
@@ -155,20 +223,34 @@ struct ProjectNoteEditor: View {
                 model.notebooks.changed(document)
             }))
             .textFieldStyle(.plain).font(.system(size: 24, weight: .semibold))
+            .multilineTextAlignment(.leading)
             .padding(.horizontal, 24).padding(.vertical, 12)
             .disabled(readOnly).focused($titleFocused).accessibilityIdentifier("notes.title")
-            HStack(spacing: 14) {
+            HStack(spacing: 10) {
                 Button(action: formatting.bold) { Image(systemName: "bold") }.keyboardShortcut("b").help("Bold (⌘B)")
                 Button(action: formatting.italic) { Image(systemName: "italic") }.keyboardShortcut("i").help("Italic (⌘I)")
-                Menu("Style") {
-                    Button("Heading") { formatting.heading(true) }
-                    Button("Body") { formatting.heading(false) }
-                }.fixedSize()
-                Menu { Button("Bulleted List") { formatting.list(numbered: false) }
-                    Button("Numbered List") { formatting.list(numbered: true) }
-                } label: { Image(systemName: "list.bullet") }.fixedSize()
-                Button(action: formatting.checklist) { Image(systemName: "checklist") }.help("Add or toggle checklist item")
-                Button { addingLink = true } label: { Image(systemName: "link") }.help("Add Link")
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        Menu("Style") {
+                            Button("Heading") { formatting.heading(true) }
+                            Button("Body") { formatting.heading(false) }
+                        }
+                        Menu {
+                            Button("Bulleted List") { formatting.list(numbered: false) }
+                            Button("Numbered List") { formatting.list(numbered: true) }
+                        } label: { Image(systemName: "list.bullet") }
+                        Button(action: formatting.checklist) { Image(systemName: "checklist") }.help("Add or toggle checklist item")
+                    }.fixedSize()
+                    Menu("Format") {
+                        Button("Heading") { formatting.heading(true) }
+                        Button("Body") { formatting.heading(false) }
+                        Divider()
+                        Button("Bulleted List") { formatting.list(numbered: false) }
+                        Button("Numbered List") { formatting.list(numbered: true) }
+                        Button("Checklist") { formatting.checklist() }
+                    }.fixedSize()
+                }
+                Button { addingLink = true } label: { Image(systemName: "link") }.keyboardShortcut("k").help("Add Link (⌘K)")
                 Spacer()
                 Button("Save") { perform { try model.notebooks.flush(note.id) } }
                     .keyboardShortcut("s").disabled(!document.isDirty)
@@ -191,6 +273,14 @@ struct ProjectNoteEditor: View {
         .background {
             if isSeparateWindow {
                 NoteWindowGuard(keepOnTop: keepOnTop, editing: model.notebooks, noteID: note.id)
+            }
+        }
+        .background {
+            if isSeparateWindow {
+                Button("Find in Note", action: formatting.find)
+                    .keyboardShortcut("f")
+                    .frame(width: 0, height: 0).opacity(0)
+                    .allowsHitTesting(false).accessibilityHidden(true)
             }
         }
         .onAppear { titleFocused = document.title.isEmpty && document.plainText.isEmpty }

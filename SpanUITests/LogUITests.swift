@@ -76,6 +76,8 @@ final class LogUITests: XCTestCase {
 
         XCTAssertTrue(span.textField("startSession.title").waitForExistence(timeout: 10),
                       "Start Session did not open the start sheet")
+        XCTAssertEqual(span.textField("startSession.title").value as? String, "Vector DB course",
+                       "the sheet lost the tab it was opened from")
         XCTAssertTrue(span.app.staticTexts["Finish part 6"].waitForExistence(timeout: 10),
                       "the start sheet does not show the tab's resume point")
     }

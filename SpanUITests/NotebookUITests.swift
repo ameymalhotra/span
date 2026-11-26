@@ -93,4 +93,17 @@ final class NotebookUITests: XCTestCase {
         XCTAssertFalse(span.textField("blockEditor.title").exists)
     }
 
+
+    func testNoteRowsHaveExpectedContextActions() {
+        makeNotebook()
+        createNote(title: "Paper ideas", text: "References")
+        let row = span.app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Paper ideas")).firstMatch
+        row.rightClick()
+        XCTAssertTrue(span.app.menuItems["Open in Separate Window"].waitForExistence(timeout: 10))
+        XCTAssertTrue(span.app.menuItems["Rename…"].exists)
+        XCTAssertTrue(span.app.menuItems["Pin"].exists)
+        XCTAssertTrue(span.app.menuItems["Copy as Text"].exists)
+        XCTAssertTrue(span.app.menuItems["Delete Note…"].exists)
+    }
+
 }
