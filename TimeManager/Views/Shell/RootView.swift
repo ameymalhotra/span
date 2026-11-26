@@ -41,6 +41,7 @@ struct RootView: View {
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @State private var isOnboarding = false
     @State private var destination: Destination = .focus
+    @State private var notebookVisible = false
 
     private static let sidebarWidth: CGFloat = 216
     /// Wide enough for the widest control the centre pane holds once page and
@@ -175,7 +176,7 @@ struct RootView: View {
         LogPaneView(onStartSession: { tabID in
             startSessionTabID = tabID
             isStartingSession = true
-        })
+        }, onNotebookVisibilityChange: { notebookVisible = $0 })
     }
 
     private func timeline(for day: Date) -> some View {
@@ -229,7 +230,7 @@ struct RootView: View {
             }
             .help("Add a time block")
             .accessibilityIdentifier("toolbar.addBlock")
-            .keyboardShortcut("b", modifiers: .command)
+            .keyboardShortcut(notebookVisible ? nil : KeyboardShortcut("b", modifiers: .command))
 
             Button {
                 if model.activeSession == nil { isStartingSession = true }
@@ -238,7 +239,7 @@ struct RootView: View {
             }
             .disabled(model.activeSession != nil)
             .accessibilityIdentifier("toolbar.startSession")
-            .keyboardShortcut("n", modifiers: .command)
+            .keyboardShortcut(notebookVisible ? nil : KeyboardShortcut("n", modifiers: .command))
             .help("Start a focus session")
         }
     }

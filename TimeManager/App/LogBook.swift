@@ -10,6 +10,7 @@ struct LogDraft: Equatable {
     var tabID: UUID?
     var resumePoint = ""
     var done = ""
+    var noteIDs: Set<UUID> = []
 
     /// Whether there is anything worth saving. Whitespace is not.
     var hasText: Bool {
@@ -19,6 +20,7 @@ struct LogDraft: Equatable {
     mutating func clearText() {
         resumePoint = ""
         done = ""
+        noteIDs = []
     }
 }
 
@@ -275,6 +277,7 @@ enum LogBook {
         resumePoint: String,
         done: String,
         session: WorkSession? = nil,
+        noteIDs: Set<UUID> = [],
         at date: Date = .now,
         in context: ModelContext
     ) throws -> LogEntry? {
@@ -288,6 +291,7 @@ enum LogBook {
             entry.sessionTitle = session.title
             entry.workedSeconds = session.elapsed(at: date)
         }
+        entry.notes = tab.notes.filter { noteIDs.contains($0.id) }
         context.insert(entry)
         tab.entries.append(entry)
         try persist(in: context)
@@ -305,7 +309,7 @@ enum LogBook {
     ) throws -> LogEntry? {
         guard draft.hasText, let tab = activeTab(id: draft.tabID, in: context) else { return nil }
         return try addEntry(to: tab, resumePoint: draft.resumePoint, done: draft.done,
-                            session: session, at: date, in: context)
+                            session: session, noteIDs: draft.noteIDs, at: date, in: context)
     }
 
     /// Rewrites an entry. Refuses to empty both fields — that is a delete, and
@@ -317,6 +321,7 @@ enum LogBook {
         done: String,
         recordedAt: Date,
         tab: LogTab? = nil,
+        noteIDs: Set<UUID>? = nil,
         at now: Date = .now,
         in context: ModelContext
     ) throws -> Bool {
@@ -332,6 +337,8 @@ enum LogBook {
             entry.tab = tab
             tab.entries.append(entry)
         }
+        let linkedIDs = noteIDs ?? Set(entry.notes.map(\.id))
+        entry.notes = (entry.tab?.notes ?? []).filter { linkedIDs.contains($0.id) }
         entry.editedAt = now
         try persist(in: context)
         return true

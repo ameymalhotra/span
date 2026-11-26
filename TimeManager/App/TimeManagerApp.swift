@@ -28,6 +28,17 @@ struct TimeManagerApp: App {
         .windowResizability(.contentMinSize)
         .commands { commands }
 
+        WindowGroup("Note", for: UUID.self) { $id in
+            if let id {
+                ProjectNoteWindow(id: id)
+                    .environment(model)
+                    .task { delegate.configure(with: model) }
+            }
+        }
+        .modelContainer(container)
+        .defaultSize(width: 620, height: 640)
+        .windowResizability(.contentMinSize)
+
         Settings {
             SettingsScene()
                 .environment(model)
@@ -125,6 +136,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, @preconcurrency UNUser
         let wanted = UserDefaults.standard.object(forKey: "hud.visible") as? Bool ?? true
         guard wanted != hud.isVisible else { return }
         wanted ? hud.show() : hud.hide()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        do { try model?.notebooks.flushAll() }
+        catch {
+            let alert = NSAlert()
+            alert.messageText = "Your notes haven’t been saved"
+            alert.informativeText = error.localizedDescription + " Retry saving or copy your text before quitting."
+            alert.runModal()
+            return .terminateCancel
+        }
+        return .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {

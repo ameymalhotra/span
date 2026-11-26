@@ -14,6 +14,7 @@ struct LogEntryEditor: View {
 
     @State private var resumePoint = ""
     @State private var done = ""
+    @State private var noteIDs: Set<UUID> = []
     @State private var recordedAt = Date.now
     @State private var tabID: UUID?
     @State private var confirmingDelete = false
@@ -53,6 +54,9 @@ struct LogEntryEditor: View {
                 }
                 LogEntryFields(resumePoint: $resumePoint, done: $done, onSubmit: save,
                                identifier: "log.editor")
+                if let tab = choices.first(where: { $0.id == tabID }) {
+                    RelatedNotesPicker(tab: tab, selection: $noteIDs)
+                }
                 if let saveError {
                     Label(saveError, systemImage: "exclamationmark.triangle")
                         .font(Theme.Font.caption)
@@ -82,6 +86,7 @@ struct LogEntryEditor: View {
             done = entry.done
             recordedAt = entry.recordedAt
             tabID = entry.tab?.id
+            noteIDs = Set(entry.notes.map(\.id))
         }
         .confirmationDialog("Delete this entry?", isPresented: $confirmingDelete) {
             Button("Delete Entry", role: .destructive) {
@@ -102,7 +107,7 @@ struct LogEntryEditor: View {
         do {
             let target = tabs.first { $0.id == tabID }
             try LogBook.update(entry, resumePoint: resumePoint, done: done,
-                               recordedAt: recordedAt, tab: target, in: context)
+                               recordedAt: recordedAt, tab: target, noteIDs: noteIDs, in: context)
             dismiss()
         } catch {
             saveError = "Not saved: \(error.localizedDescription)"

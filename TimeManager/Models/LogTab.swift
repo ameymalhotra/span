@@ -27,6 +27,12 @@ final class LogTab {
     @Relationship(deleteRule: .cascade, inverse: \LogEntry.tab)
     var entries: [LogEntry] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \ProjectNote.tab)
+    var notes: [ProjectNote] = []
+
+    /// Kept with the project so switching destinations preserves its workspace.
+    var showsNotes: Bool = false
+
     init(name: String, group: String = "", colorSlot: Int = 0, sortIndex: Int = 0, createdAt: Date = .now) {
         self.id = UUID()
         self.name = name

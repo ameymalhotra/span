@@ -29,6 +29,7 @@ enum SessionEnding {
 @Observable
 final class AppModel {
 
+    let notebooks: NoteEditingCoordinator
     let tracker: ActivityTracker
     let accessibility = AccessibilityPermission()
     let updates = UpdateChecker()
@@ -156,6 +157,7 @@ final class AppModel {
         // before any view noticed a session had started.
         self.context = container.mainContext
         self.tracker = ActivityTracker(context: context)
+        self.notebooks = NoteEditingCoordinator(context: context)
 
         // Colours have to be known before the first view draws, not after.
         // Loading these in start() — which runs from a .task once the window is
@@ -223,6 +225,7 @@ final class AppModel {
         activeSession = nil
         clearBreak(resumingWork: false)
         clearLogDrafts()
+        notebooks.reset()
         ModelStack.resetEverything(in: context)
         tracker.isPaused = wasPaused
         refreshStats()

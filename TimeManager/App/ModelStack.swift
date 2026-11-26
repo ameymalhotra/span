@@ -15,6 +15,7 @@ enum ModelStack {
         AppCategoryRule.self,
         LogTab.self,
         LogEntry.self,
+        ProjectNote.self,
     ])
 
     static func makeContainer() -> ModelContainer {
@@ -133,6 +134,7 @@ enum ModelStack {
         try? context.delete(model: WorkSession.self)
         try? context.delete(model: AppCategoryRule.self)
         try? context.delete(model: TimeCategory.self)
+        try? context.delete(model: ProjectNote.self)
         try? context.delete(model: LogEntry.self)
         try? context.delete(model: LogTab.self)
         try? context.save()

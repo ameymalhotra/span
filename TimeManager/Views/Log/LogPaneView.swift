@@ -15,6 +15,7 @@ struct LogPaneView: View {
 
     /// Opens the start sheet with this tab chosen.
     let onStartSession: (UUID) -> Void
+    var onNotebookVisibilityChange: (Bool) -> Void = { _ in }
 
     private static let sidebarWidth: CGFloat = 220
 
@@ -51,14 +52,16 @@ struct LogPaneView: View {
                         .frame(width: Self.sidebarWidth)
                     Divider()
                     if let tab = selectedTab {
-                        LogTabDetail(
-                            tab: tab,
-                            draft: Binding(
-                                get: { model.logDrafts[tab.id] ?? LogDraft(tabID: tab.id) },
-                                set: { model.logDrafts[tab.id] = $0 }
-                            ),
-                            onStartSession: { onStartSession(tab.id) }
-                        )
+                        ProjectWorkspace(tab: tab) {
+                            LogTabDetail(
+                                tab: tab,
+                                draft: Binding(
+                                    get: { model.logDrafts[tab.id] ?? LogDraft(tabID: tab.id) },
+                                    set: { model.logDrafts[tab.id] = $0 }
+                                ),
+                                onStartSession: { onStartSession(tab.id) }
+                            )
+                        }
                         .id(tab.id)
                     } else {
                         Text("Choose a tab")
@@ -71,6 +74,10 @@ struct LogPaneView: View {
         }
         .background(Theme.canvas)
         .onAppear(perform: ensureSelection)
+        .onChange(of: selectedTab?.showsNotes, initial: true) { _, visible in
+            onNotebookVisibilityChange(visible == true)
+        }
+        .onDisappear { onNotebookVisibilityChange(false) }
         .onChange(of: tabs.map(\.id)) { _, _ in ensureSelection() }
         .alert("Couldn't create tab", isPresented: Binding(
             get: { creationError != nil },
@@ -155,6 +162,7 @@ private struct LogEmptyState: View {
 
 /// Tabs under their group headings, archived ones folded away at the bottom.
 private struct LogSidebar: View {
+    @Environment(AppModel.self) private var model
     @Environment(\.modelContext) private var context
     let tabs: [LogTab]
     @Binding var selection: UUID?
@@ -287,8 +295,12 @@ private struct LogSidebar: View {
                 phrase: "delete",
                 confirmLabel: "Delete Tab",
                 onConfirm: {
-                    if selection == tab.id { selection = nil }
-                    perform { try LogBook.delete(tab, in: context) }
+                    perform {
+                        let noteIDs = tab.notes.map(\.id)
+                        try LogBook.delete(tab, in: context)
+                        for id in noteIDs { model.notebooks.forget(id) }
+                        if selection == tab.id { selection = nil }
+                    }
                     deleting = nil
                 },
                 onCancel: { deleting = nil }
@@ -300,9 +312,10 @@ private struct LogSidebar: View {
         let count = tab.entries.count
         let entries = count == 1 ? "its 1 entry" : "all \(count) of its entries"
         let archive = tab.isArchived ? "" : " To hide it but keep its history, archive it instead."
+        let notes = tab.notes.isEmpty ? "" : " All \(tab.notes.count) project notes will also be deleted."
         return count == 0
-            ? "The tab will be removed.\(archive)"
-            : "The tab and \(entries) will be removed.\(archive)"
+            ? "The tab will be removed.\(notes)\(archive)"
+            : "The tab and \(entries) will be removed.\(notes)\(archive)"
     }
 
     private func row(_ tab: LogTab) -> some View {
@@ -366,7 +379,12 @@ private struct LogSidebar: View {
         }
         Divider()
         Button(tab.isArchived ? "Unarchive" : "Archive") {
-            perform { try LogBook.setArchived(tab, !tab.isArchived, in: context) }
+            perform {
+                if !tab.isArchived {
+                    for note in tab.notes { try model.notebooks.flush(note.id) }
+                }
+                try LogBook.setArchived(tab, !tab.isArchived, in: context)
+            }
         }
         Button("Delete…", role: .destructive) { deleting = tab }
     }
@@ -590,6 +608,7 @@ private struct LogTabDetail: View {
                 focusOnAppear: false,
                 onSubmit: save
             )
+            RelatedNotesPicker(tab: tab, selection: $draft.noteIDs)
             HStack(spacing: Theme.Space.s) {
                 if let linkedSession {
                     Label("Linked to “\(linkedSession.title)”", systemImage: "timer")
@@ -737,6 +756,7 @@ private struct LogEntryRow: View {
             if entry.hasDone {
                 field("Done", entry.done)
             }
+            RelatedNoteLinks(notes: entry.notes)
         }
         .padding(.vertical, Theme.Space.m)
         .padding(.horizontal, Theme.Space.s)

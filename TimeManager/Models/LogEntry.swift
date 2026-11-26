@@ -17,6 +17,7 @@ final class LogEntry {
     var editedAt: Date?
     var resumePoint: String = ""
     var done: String = ""
+    var notes: [ProjectNote] = []
 
     /// The session this entry was written about, if one was running or had
     /// just finished. An ID rather than a relationship, so deleting a session
