@@ -236,7 +236,15 @@ struct DayTimelineView: View {
         }
         // The ghost of a block just created stays until its card arrives, so
         // the two are never both missing for a frame.
+        .onChange(of: sessions.map(\.persistentModelID)) { _, _ in
+            if let editingSession, !sessions.contains(where: { $0 === editingSession }) {
+                self.editingSession = nil
+            }
+        }
         .onChange(of: entries.map(\.id)) { _, ids in
+            if let editingEntry, !entries.contains(where: { $0 === editingEntry }) {
+                self.editingEntry = nil
+            }
             guard let id = draft.awaiting, ids.contains(id) else { return }
             draft.range = nil
             draft.awaiting = nil
@@ -286,7 +294,7 @@ struct DayTimelineView: View {
             } else if let session = session(for: block) {
                 try model.deleteSession(session)
             } else if let record = breakRecord(for: block) {
-                model.deleteBreak(record)
+                try model.deleteBreak(record)
             }
             closeInspector()
         } catch {
@@ -361,8 +369,10 @@ struct DayTimelineView: View {
                     } else if let block = selection {
                         if let record = breakRecord(for: block) {
                             TimelineBlockDetail(block: block, onDelete: {
-                                selection = nil
-                                model.deleteBreak(record)
+                                do {
+                                    try model.deleteBreak(record)
+                                    selection = nil
+                                } catch { writeError = error.localizedDescription }
                             }, onClose: { selection = nil })
                         } else {
                             TimelineBlockDetail(block: block) { selection = nil }

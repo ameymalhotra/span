@@ -692,7 +692,7 @@ struct AppModelTests {
         model.startBreak(minutes: 10, at: now)
         let end = model.breakEndsAt
 
-        model.deleteBreak(past)
+        try model.deleteBreak(past)
 
         let records = try context.fetch(FetchDescriptor<BreakRecord>())
         #expect(records.count == 1)
@@ -707,7 +707,7 @@ struct AppModelTests {
         model.startBreak(minutes: 10)
         let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
 
-        model.deleteBreak(record)
+        try model.deleteBreak(record)
 
         #expect(!model.isOnBreak)
         #expect(model.breakEndsAt == nil)
@@ -726,7 +726,7 @@ struct AppModelTests {
     func deletingAStandaloneBreak() throws {
         model.startBreak(minutes: 10)
         let record = try #require(try context.fetch(FetchDescriptor<BreakRecord>()).first)
-        model.deleteBreak(record)
+        try model.deleteBreak(record)
         model.finishBreakIfDue(at: .now.addingTimeInterval(3600))
 
         #expect(!model.isOnBreak)

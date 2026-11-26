@@ -38,11 +38,22 @@ final class AppModel {
     /// The day the main window is showing.
     var selectedDate: Date = Calendar.current.startOfDay(for: .now)
 
-    private(set) var activeSession: WorkSession?
+    private(set) var activeSession: WorkSession? {
+        didSet {
+            activeSessionID = activeSession?.id
+            activeSessionStoreID = activeSession?.persistentModelID
+        }
+    }
+    @ObservationIgnored private var activeSessionID: UUID?
+    @ObservationIgnored private var activeSessionStoreID: PersistentIdentifier?
+    @ObservationIgnored private var storeObservation: TimerStoreObservation?
 
     /// A block just created from the toolbar, waiting for the timeline to open
     /// its editor.
-    var pendingBlockEdit: TimeEntry?
+    var pendingBlockEdit: TimeEntry? {
+        didSet { pendingBlockStoreID = pendingBlockEdit?.persistentModelID }
+    }
+    @ObservationIgnored private var pendingBlockStoreID: PersistentIdentifier?
 
     /// Set after a reset so the window can offer the first-run questions again.
     var needsOnboarding = false
@@ -64,7 +75,10 @@ final class AppModel {
     /// The main window presents the sheet. The menu bar and the HUD can finish
     /// a session but have nowhere to show one, so they hand it over here rather
     /// than dropping the review on the floor.
-    var pendingReflection: WorkSession?
+    var pendingReflection: WorkSession? {
+        didSet { reflectionStoreID = pendingReflection?.persistentModelID }
+    }
+    @ObservationIgnored private var reflectionStoreID: PersistentIdentifier?
 
     /// How `pendingReflection` came to an end, so the sheet can say why a
     /// session the user did not finish themselves is over.
@@ -98,7 +112,14 @@ final class AppModel {
     private(set) var sessionPausedForBreak = false
     /// The record the running break is being written to, so the timeline can
     /// draw it while it runs and keep it once it is over.
-    private var runningBreak: BreakRecord?
+    private var runningBreak: BreakRecord? {
+        didSet {
+            runningBreakID = runningBreak?.id
+            runningBreakStoreID = runningBreak?.persistentModelID
+        }
+    }
+    @ObservationIgnored private var runningBreakID: UUID?
+    @ObservationIgnored private var runningBreakStoreID: PersistentIdentifier?
 
     var isOnBreak: Bool { breakEndsAt != nil }
 
@@ -167,6 +188,11 @@ final class AppModel {
         // registry is invisible to SwiftUI.
         ModelStack.seedCategoriesIfNeeded(in: context)
         ModelStack.loadAppRules(in: context)
+        storeObservation = TimerStoreObservation { [weak self] deleted in
+            // The observer uses Foundation's main queue, including saves made
+            // by another context. Never read an invalidated model's fields.
+            MainActor.assumeIsolated { self?.reconcileTimerState(deleted: deleted) }
+        }
     }
 
     // MARK: - Lifecycle
@@ -178,6 +204,11 @@ final class AppModel {
         ModelStack.clampReviewsToWorkedTime(in: context)
         ModelStack.closeOpenBreaks(in: context)
         refreshActiveSession()
+        if let session = activeSession {
+            // The previous process may have left a reminder for paused work.
+            // Scheduling is status-aware and cancels that request when paused.
+            NotificationService.scheduleEndReminder(for: session)
+        }
         tracker.start()
         retune()
         Task { await updates.checkIfDue() }
@@ -223,6 +254,9 @@ final class AppModel {
             NotificationService.cancelReminder(for: session)
         }
         activeSession = nil
+        pendingReflection = nil
+        pendingBlockEdit = nil
+        offersBreakAfterReview = false
         clearBreak(resumingWork: false)
         clearLogDrafts()
         notebooks.reset()
@@ -230,6 +264,24 @@ final class AppModel {
         tracker.isPaused = wasPaused
         refreshStats()
         needsOnboarding = true
+    }
+
+    /// A sheet in another window can outlive its record. Check the saved
+    /// store before a stale editor turns deleted work back into a session.
+    private func stillStored(_ session: WorkSession) -> Bool {
+        guard !session.isDeleted, session.modelContext != nil else { return false }
+        let id = session.id
+        var query = FetchDescriptor<WorkSession>(predicate: #Predicate { $0.id == id })
+        query.includePendingChanges = false
+        return ((try? context.fetchCount(query)) ?? 0) > 0
+    }
+
+    private func stillStored(_ entry: TimeEntry) -> Bool {
+        guard !entry.isDeleted, entry.modelContext != nil else { return false }
+        let id = entry.id
+        var query = FetchDescriptor<TimeEntry>(predicate: #Predicate { $0.id == id })
+        query.includePendingChanges = false
+        return ((try? context.fetchCount(query)) ?? 0) > 0
     }
 
     // MARK: - Session control
@@ -243,6 +295,7 @@ final class AppModel {
     /// keyboard shortcut all reach this directly.
     @discardableResult
     func startSession(title: String, category: String, minutes: Int, logTabID: UUID? = nil) -> WorkSession? {
+        reconcileTimerState()
         if activeSession == nil { refreshActiveSession() }
         guard activeSession == nil else { return nil }
 
@@ -302,6 +355,9 @@ final class AppModel {
     /// left alongside: two records for one stretch of work would be counted
     /// twice in every total.
     func startSession(from entry: TimeEntry) {
+        reconcileTimerState()
+        guard stillStored(entry) else { return }
+        if activeSession == nil { refreshActiveSession() }
         guard activeSession == nil else { return }
         clearBreak(resumingWork: false)
         let title = entry.title.trimmingCharacters(in: .whitespaces)
@@ -325,7 +381,8 @@ final class AppModel {
     }
 
     func pauseSession() {
-        guard let activeSession else { return }
+        reconcileTimerState()
+        guard let activeSession, activeSession.status == .active else { return }
         activeSession.pause()
         NotificationService.cancelReminder(for: activeSession)
         save()
@@ -333,7 +390,9 @@ final class AppModel {
     }
 
     func resumeSession() {
-        guard let activeSession else { return }
+        reconcileTimerState()
+        guard let activeSession, activeSession.status == .paused else { return }
+        if isOnBreak { clearBreak(resumingWork: false) }
         activeSession.resume()
         NotificationService.scheduleEndReminder(for: activeSession)
         save()
@@ -348,6 +407,7 @@ final class AppModel {
     /// finished but unreviewed for good.
     @discardableResult
     func finishSession(at date: Date = .now, ending: SessionEnding = .byHand) -> WorkSession? {
+        reconcileTimerState()
         guard let session = activeSession else { return nil }
 
         // Clicking Finish five minutes after the hour was up does not buy five
@@ -363,6 +423,7 @@ final class AppModel {
         session.complete(at: end)
         save()
         activeSession = nil
+        sessionPausedForBreak = false
         pendingReflection = session
         pendingReflectionEnding = ending
         offersBreakAfterReview = ending != .abandoned && !isOnBreak
@@ -377,8 +438,8 @@ final class AppModel {
             throw CocoaError(.fileWriteNoPermission)
         }
         let id = session.id
-        let wasActive = activeSession?.id == id
-        let wasPending = pendingReflection?.id == id
+        let wasActive = activeSessionID == id
+        let wasPending = reflectionStoreID == session.persistentModelID
         if wasActive { NotificationService.cancelReminder(for: session) }
         context.delete(session)
         do { try context.save() }
@@ -402,6 +463,7 @@ final class AppModel {
     /// Ends a session that has run the time it was given, on the minute it was
     /// due rather than whenever the next tick happens to land.
     func finishAtPlannedEndIfDue(at date: Date = .now) {
+        reconcileTimerState()
         guard let session = activeSession, session.status == .active,
               let planned = session.plannedEnd(at: date), planned <= date else { return }
         finishSession(at: planned, ending: .plannedEnd)
@@ -432,6 +494,7 @@ final class AppModel {
     /// rather than from input that predates it.
     @discardableResult
     func autoFinishIfAbandoned(at now: Date = .now, idleFor idle: TimeInterval) -> WorkSession? {
+        reconcileTimerState()
         guard let session = activeSession, let grace = abandonmentGrace else { return nil }
 
         // A paused session is not over-counting — its clock stopped when it was
@@ -448,6 +511,7 @@ final class AppModel {
     }
 
     func extendSession(byMinutes minutes: Int) {
+        reconcileTimerState()
         guard let activeSession else { return }
         activeSession.plannedMinutes += minutes
         save()
@@ -473,7 +537,8 @@ final class AppModel {
     /// leaving a finished session ending in the future.
     @discardableResult
     func resumeSession(_ session: WorkSession, endingAt end: Date, at now: Date = .now) -> Bool {
-        guard session.status == .completed, end > now else { return false }
+        reconcileTimerState()
+        guard stillStored(session), session.status == .completed, end > now else { return false }
         if activeSession == nil { refreshActiveSession() }
         guard activeSession == nil else { return false }
 
@@ -515,6 +580,8 @@ final class AppModel {
     /// asking for forty minutes on a session that has run fifty ends it now,
     /// with its fifty minutes intact, rather than ten minutes ago.
     func setPlannedMinutes(_ minutes: Int, for session: WorkSession) {
+        reconcileTimerState()
+        guard stillStored(session) else { return }
         let floor = max(1, session.workedMinutes())
         session.plannedMinutes = max(floor, min(minutes, Self.plannedMinutesLimit))
         save()
@@ -536,6 +603,7 @@ final class AppModel {
     /// would be recorded as work, which is exactly the arithmetic the rest of
     /// the app goes to some trouble to avoid.
     func startBreak(minutes: Int, at date: Date = .now) {
+        reconcileTimerState()
         offersBreakAfterReview = false
         if activeSession?.status == .active {
             pauseSession()
@@ -546,8 +614,8 @@ final class AppModel {
         closeRunningBreak(at: date)
         let record = BreakRecord(startedAt: date, plannedEnd: end)
         context.insert(record)
-        runningBreak = record
         save()
+        runningBreak = record
         breakEndsAt = end
         breakLength = length
         NotificationService.scheduleBreakEnd(at: end)
@@ -555,6 +623,7 @@ final class AppModel {
     }
 
     func extendBreak(byMinutes minutes: Int) {
+        reconcileTimerState()
         guard let breakEndsAt else { return }
         let end = breakEndsAt.addingTimeInterval(TimeInterval(minutes * 60))
         self.breakEndsAt = end
@@ -570,6 +639,7 @@ final class AppModel {
     /// running session's is: ending the break is the button's job, not the
     /// drag handle's.
     func setBreakEnd(_ date: Date, now: Date = .now) {
+        reconcileTimerState()
         guard let breakEndsAt, let record = runningBreak else { return }
         let end = max(date, now.addingTimeInterval(60))
         breakLength += end.timeIntervalSince(breakEndsAt)
@@ -582,7 +652,8 @@ final class AppModel {
 
     /// Whether `record` is the break running now.
     func isRunningBreak(_ record: BreakRecord) -> Bool {
-        runningBreak?.id == record.id
+        guard let runningBreakID else { return false }
+        return runningBreakID == record.id
     }
 
     /// Ends the break. Coming back deliberately resumes the session the break
@@ -596,21 +667,62 @@ final class AppModel {
 
     /// Removes a break from the timeline. Deleting a running break cancels
     /// its countdown too, but does not assume the user is back at work.
-    func deleteBreak(_ record: BreakRecord) {
-        if isRunningBreak(record) { clearBreak(resumingWork: false) }
+    func deleteBreak(_ record: BreakRecord) throws {
+        guard context.container.configurations.allSatisfy(\.allowsSave) else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        let wasRunning = isRunningBreak(record)
         context.delete(record)
-        save()
+        do { try context.save() }
+        catch { context.rollback(); throw error }
+        if wasRunning { discardBreakTimer() }
         refreshStats()
     }
 
     private func clearBreak(resumingWork: Bool, at date: Date = .now) {
+        offersBreakAfterReview = false
+        let shouldResume = sessionPausedForBreak && resumingWork
         closeRunningBreak(at: date)
+        discardBreakTimer()
+        if shouldResume, activeSession?.status == .paused { resumeSession() }
+    }
+
+    /// Drop transient countdown state without writing a record that has
+    /// already been deleted. A deleted break never resumes paused work.
+    private func discardBreakTimer() {
+        runningBreak = nil
         breakEndsAt = nil
         breakLength = 0
-        NotificationService.cancelBreakEnd()
-        let shouldResume = sessionPausedForBreak && resumingWork
+        breakClock = "00:00"
         sessionPausedForBreak = false
-        if shouldResume, activeSession?.status == .paused { resumeSession() }
+        NotificationService.cancelBreakEnd()
+    }
+
+    /// A save from any window/context may remove a record the timer cached.
+    /// IDs are captured while records are live, so cancellation never faults
+    /// an invalid SwiftData object. The periodic tick is a second backstop.
+    func reconcileTimerState(deleted: Set<PersistentIdentifier> = []) {
+        if let session = activeSession,
+           session.isDeleted || session.modelContext == nil || activeSessionStoreID.map(deleted.contains) == true {
+            if let id = activeSessionID { NotificationService.cancelReminder(for: id) }
+            activeSession = nil
+            sessionClock = "00:00"
+            sessionIsOvertime = false
+            sessionPausedForBreak = false
+        }
+        if let record = runningBreak,
+           record.isDeleted || record.modelContext == nil || runningBreakStoreID.map(deleted.contains) == true {
+            discardBreakTimer()
+        }
+        if let session = pendingReflection,
+           session.isDeleted || session.modelContext == nil || reflectionStoreID.map(deleted.contains) == true {
+            pendingReflection = nil
+            offersBreakAfterReview = false
+        }
+        if let entry = pendingBlockEdit,
+           entry.isDeleted || entry.modelContext == nil || pendingBlockStoreID.map(deleted.contains) == true {
+            pendingBlockEdit = nil
+        }
     }
 
     /// Writes down where the running break stopped. Never past its planned
@@ -673,6 +785,7 @@ final class AppModel {
     }
 
     private func refreshStats() {
+        reconcileTimerState()
         let now = Date.now
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: now)
@@ -748,6 +861,7 @@ final class AppModel {
     /// break — the same arrangement the session chime has. Internal so tests can
     /// drive it without waiting out a real break.
     func finishBreakIfDue(at date: Date) {
+        reconcileTimerState()
         guard let end = breakEndsAt, date >= end else { return }
         NotificationService.announceBreakEnd(at: end)
         clearBreak(resumingWork: false, at: end)

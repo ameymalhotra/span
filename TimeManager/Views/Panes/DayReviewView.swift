@@ -5,9 +5,9 @@ import SwiftUI
 struct DayReviewView: View {
     let day: Date
 
-    @Environment(\.modelContext) private var context
     @Environment(AppModel.self) private var model
     @State private var editing: WorkSession?
+    @State private var deleteError: String?
 
     @Query private var sessions: [WorkSession]
     @Query private var entries: [TimeEntry]
@@ -44,10 +44,16 @@ struct DayReviewView: View {
             }
         }
         .background(Theme.canvas)
+        .onChange(of: sessions.map(\.persistentModelID)) { _, _ in
+            if let editing, !sessions.contains(where: { $0 === editing }) { self.editing = nil }
+        }
         .sheet(item: $editing) { session in
             SessionEditor(session: session, model: model) { editing = nil }
                 .padding(.vertical, Theme.Space.s)
         }
+        .alert("Couldn’t delete session", isPresented: Binding(
+            get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }
+        )) { Button("OK", role: .cancel) {} } message: { Text(deleteError ?? "") }
     }
 
     private var metrics: some View {
@@ -95,9 +101,8 @@ struct DayReviewView: View {
                         .contextMenu {
                             Button("Edit…") { editing = session }
                             Button("Delete", role: .destructive) {
-                                NotificationService.cancelReminder(for: session)
-                                context.delete(session)
-                                try? context.save()
+                                do { try model.deleteSession(session) }
+                                catch { deleteError = error.localizedDescription }
                             }
                         }
                 }

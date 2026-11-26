@@ -58,6 +58,11 @@ enum NotificationService {
 
     @MainActor
     static func scheduleEndReminder(for session: WorkSession) {
+        guard !session.isDeleted, session.modelContext != nil else { return }
+        guard session.status == .active else {
+            cancelReminder(for: session.id)
+            return
+        }
         armChime(for: session)
         guard !isTesting else { return }
         let seconds = max(1, session.remaining())
@@ -73,10 +78,18 @@ enum NotificationService {
 
     @MainActor
     static func cancelReminder(for session: WorkSession) {
-        chime?.cancel()
-        chime = nil
+        cancelReminder(for: session.id)
+    }
+
+    @MainActor
+    static func cancelReminder(for id: UUID) {
+        if armedSessionID == id {
+            chime?.cancel()
+            chime = nil
+            armedSessionID = nil
+        }
         guard !isTesting else { return }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [session.id.uuidString])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id.uuidString])
     }
 
     // MARK: - The chime
@@ -88,6 +101,7 @@ enum NotificationService {
     /// sounding the end is the one thing a timer has to do. Both are armed
     /// together so no caller can reschedule one and forget the other.
     @MainActor private static var chime: Task<Void, Never>?
+    @MainActor private(set) static var armedSessionID: UUID?
     /// The session whose end has already been sounded, so the timer below and
     /// the tick backstop cannot announce the same ending twice.
     @MainActor private static var chimedSession: UUID?
@@ -97,6 +111,7 @@ enum NotificationService {
         chime?.cancel()
         chime = nil
         guard session.status == .active else { return }
+        armedSessionID = session.id
 
         // Re-arming means the end moved — the session was extended, resumed or
         // its planned length edited — so a previous announcement no longer
@@ -104,9 +119,10 @@ enum NotificationService {
         let remaining = session.remaining()
         if remaining > 0 { chimedSession = nil }
 
-        chime = Task { @MainActor in
+        chime = Task { @MainActor [weak session] in
             try? await Task.sleep(for: .seconds(max(0.25, remaining)))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let session,
+                  !session.isDeleted, session.modelContext != nil else { return }
             announceEnd(of: session)
         }
     }
@@ -115,8 +131,8 @@ enum NotificationService {
     /// session whose length changed by a route that did not reschedule.
     @MainActor
     static func announceEndIfDue(for session: WorkSession?, at date: Date = .now) {
-        guard let session, session.status == .active,
-              session.remaining(at: date) <= 0 else { return }
+        guard let session, !session.isDeleted, session.modelContext != nil,
+              session.status == .active, session.remaining(at: date) <= 0 else { return }
         announceEnd(of: session)
     }
 
@@ -175,7 +191,8 @@ enum NotificationService {
 
     @MainActor
     static func announceEnd(of session: WorkSession) {
-        guard session.status == .active, chimedSession != session.id else { return }
+        guard !session.isDeleted, session.modelContext != nil,
+              session.status == .active, chimedSession != session.id else { return }
         chimedSession = session.id
         guard !isTesting else { return }
         if isSoundEnabled { NSSound(named: "Glass")?.play() }
