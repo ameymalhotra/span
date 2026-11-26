@@ -203,6 +203,48 @@ struct TimelineGeometryTests {
         #expect(y == 23 * hourHeight)
         #expect(height == hourHeight)
     }
+    @Test("double-click creation snaps the clicked time and defaults to thirty minutes")
+    func quickCreationAtClickedTime() {
+        let range = geometry.newBlockRange(at: 10 * hourHeight + 3)
+        #expect(range.start == Clock.at(hour: 10 + 5.0 / 60))
+        #expect(range.end.timeIntervalSince(range.start) == 30 * 60)
+    }
+
+    @Test("quick creation at the bottom stays in the same day")
+    func quickCreationAtMidnight() {
+        let range = geometry.newBlockRange(at: geometry.totalHeight + 50)
+        #expect(range.start == Clock.at(hour: 23 + 55.0 / 60))
+        #expect(range.end == Clock.dayStart.addingTimeInterval(24 * 3600))
+        #expect(range.end.timeIntervalSince(range.start) == 5 * 60)
+    }
+
+    @Test("quick creation above the track starts at midnight")
+    func quickCreationBeforeDay() {
+        let range = geometry.newBlockRange(at: -50)
+        #expect(range.start == Clock.dayStart)
+        #expect(range.end == Clock.at(hour: 0.5))
+    }
+
+    @Test("quick creation uses the current zoom")
+    func quickCreationZoom() {
+        let zoomed = TimelineGeometry(dayStart: Clock.dayStart, hourHeight: 150)
+        let range = zoomed.newBlockRange(at: 10.5 * 150)
+        #expect(range.start == Clock.at(hour: 10.5))
+        #expect(range.end == Clock.at(hour: 11))
+    }
+
+    @Test("quick creation respects both DST day lengths")
+    func quickCreationDST() {
+        for date in [Clock.date(2025, 3, 9), Clock.date(2025, 11, 2)] {
+            let day = TimelineGeometry(dayStart: date, hourHeight: 90)
+            let range = day.newBlockRange(at: day.totalHeight)
+            let end = Calendar.current.date(byAdding: .day, value: 1, to: date)
+            #expect(range.end == end)
+            #expect(range.start.timeIntervalSince(date) == Double(day.hourCount) * 3600 - 300)
+            #expect(range.end.timeIntervalSince(range.start) == 300)
+        }
+    }
+
 }
 
 // MARK: - The inspector panel
@@ -238,4 +280,23 @@ struct PanelPlacementTests {
         let anchor = geometry.y(for: Clock.at(hour: 23))
         #expect(geometry.panelTop(anchoredAt: anchor, height: geometry.totalHeight + 200) == 0)
     }
+
+
+
+    @Test("an inspector near the viewport bottom stays visible")
+    func viewportBottom() {
+        let visible: ClosedRange<CGFloat> = 600...1000
+        let top = geometry.panelTop(anchoredAt: 950, height: 260, visibleRange: visible)
+        #expect(top >= 600)
+        #expect(top + 260 <= 1000)
+    }
+
+    @Test("an inspector stays below the viewport top")
+    func viewportTop() {
+        let visible: ClosedRange<CGFloat> = 600...1000
+        let top = geometry.panelTop(anchoredAt: 600, height: 260, visibleRange: visible)
+        #expect(top >= 600)
+        #expect(top + 260 <= 1000)
+    }
+
 }

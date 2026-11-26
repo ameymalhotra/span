@@ -7,6 +7,7 @@ struct TimeEntryEditor: View {
     @Environment(AppModel.self) private var model
 
     @Bindable var entry: TimeEntry
+    var width: CGFloat = 290
     let onClose: () -> Void
 
     /// True while the block covers the present moment.
@@ -84,7 +85,7 @@ struct TimeEntryEditor: View {
         }
         .font(Theme.Font.body)
         .padding(Theme.Space.l)
-        .frame(width: 290)
+        .frame(width: width)
         .onAppear { titleFocused = true }
         .onChange(of: entry.startedAt) { _, _ in clampEnd() }
     }

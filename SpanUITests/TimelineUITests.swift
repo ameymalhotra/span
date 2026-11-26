@@ -157,4 +157,32 @@ final class TimelineUITests: XCTestCase {
         XCTAssertFalse(span.button("focus.start").waitForExistence(timeout: 2),
                        "the focus pane is still showing on the timeline destination")
     }
+
+    func testDoubleClickingTheFocusTimelineCreatesABlock() {
+        span = SpanApp().launch()
+        let point = span.window.coordinate(withNormalizedOffset: CGVector(dx: 0.84, dy: 0.4))
+        point.doubleClick()
+        let title = span.textField("entryEditor.title")
+        title.waitToAppear(10, "double-clicking empty Focus timeline space did not create a block")
+        span.type("Double-clicked block", into: title)
+        span.button("entryEditor.done").click()
+        let block = span.app.staticTexts["Double-clicked block"]
+        block.waitToAppear()
+        block.doubleClick()
+        title.waitToAppear(10, "double-clicking an existing block closed its editor")
+        span.app.typeKey(.escape, modifierFlags: [])
+        title.waitToVanish(10)
+    }
+
+    func testTheEmptyTimelineHasAnAddBlockContextMenu() {
+        span = SpanApp().launch()
+        span.select("timeline")
+        let point = span.window.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        point.rightClick()
+        let add = span.app.menuItems["Add Block Here"]
+        add.waitToAppear()
+        add.click()
+        span.textField("entryEditor.title").waitToAppear()
+    }
+
 }

@@ -15,9 +15,11 @@ struct SessionEditor: View {
     /// to reach the one model every surface shares — a session that quietly
     /// failed to start again would look exactly like the bug this fixes.
     let model: AppModel
+    var width: CGFloat = 300
     let onClose: () -> Void
 
     @State private var isConfirmingDelete = false
+    @State private var deleteError: String?
     /// What is in the real-work field. Held apart from the stored number so a
     /// half-typed or emptied entry is not snapped to something else.
     @State private var honestDraft = ""
@@ -55,7 +57,10 @@ struct SessionEditor: View {
         }
         .font(Theme.Font.body)
         .padding(Theme.Space.l)
-        .frame(width: 300)
+        .frame(width: width)
+        .alert("Couldn’t delete session", isPresented: Binding(
+            get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }
+        )) { Button("OK", role: .cancel) {} } message: { Text(deleteError ?? "") }
     }
 
     private var header: some View {
@@ -166,7 +171,7 @@ struct SessionEditor: View {
             }
             .labelsHidden()
             .pickerStyle(.segmented)
-            .frame(width: 170)
+            .frame(width: min(170, max(100, width - 110)))
         }
 
         // The review's own question, editable here for the same reason the
@@ -256,10 +261,10 @@ struct SessionEditor: View {
     }
 
     private func delete() {
-        NotificationService.cancelReminder(for: session)
-        context.delete(session)
-        try? context.save()
-        onClose()
+        do {
+            try model.deleteSession(session)
+            onClose()
+        } catch { deleteError = error.localizedDescription }
     }
 
     private func commit() {

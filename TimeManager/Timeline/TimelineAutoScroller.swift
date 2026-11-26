@@ -17,6 +17,15 @@ final class TimelineAutoScroller {
 
     fileprivate weak var scrollView: NSScrollView?
 
+    /// The visible part of the day, in the same downward coordinates as the
+    /// track. Read when an inspector opens so it stays on screen near a click.
+    var visibleDayRange: ClosedRange<CGFloat>? {
+        guard let scrollView, let document = scrollView.documentView else { return nil }
+        let rect = scrollView.documentVisibleRect
+        let top = document.isFlipped ? rect.minY : document.bounds.height - rect.maxY
+        return max(0, top)...max(0, top + rect.height)
+    }
+
     private var loop: Task<Void, Never>?
     private var onScroll: ((CGFloat) -> Void)?
 

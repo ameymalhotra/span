@@ -55,6 +55,15 @@ struct TimelineGeometry {
         return dayStart.addingTimeInterval((offset / step).rounded() * step)
     }
 
+    /// A quick click creates half an hour at the clicked time. Keep even a
+    /// click on the last gridline inside this day, with at least five minutes
+    /// left to edit. Using the day's actual end also handles DST transitions.
+    func newBlockRange(at y: CGFloat) -> (start: Date, end: Date) {
+        let dayEnd = date(for: totalHeight)
+        let start = min(max(dayStart, snapped(date(for: y))), dayEnd.addingTimeInterval(-5 * 60))
+        return (start, min(start.addingTimeInterval(30 * 60), dayEnd))
+    }
+
     /// Vertical extent of a block, clipped to the visible day and given a floor
     /// so a very short span stays visible and clickable.
     func extent(for block: TimelineBlock, minimumHeight: CGFloat = 3) -> (y: CGFloat, height: CGFloat) {
@@ -70,8 +79,12 @@ struct TimelineGeometry {
     /// running past the bottom is cut off rather than scrolled to — which is
     /// what happened to every block late in the evening while this was clamped
     /// against an assumed height instead of the panel's real one.
-    func panelTop(anchoredAt anchor: CGFloat, height: CGFloat, inset: CGFloat = 8) -> CGFloat {
-        min(max(0, anchor - inset), max(0, totalHeight - height - inset))
+    func panelTop(anchoredAt anchor: CGFloat, height: CGFloat, inset: CGFloat = 8,
+                  visibleRange: ClosedRange<CGFloat>? = nil) -> CGFloat {
+        let lower = max(0, (visibleRange?.lowerBound ?? 0) + (visibleRange == nil ? 0 : inset))
+        let end = min(totalHeight, visibleRange?.upperBound ?? totalHeight)
+        let upper = max(lower, end - height - inset)
+        return min(max(lower, anchor - inset), upper)
     }
 }
 

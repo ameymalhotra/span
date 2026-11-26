@@ -22,6 +22,8 @@ struct DayTimelineView: View {
     @State private var selection: TimelineBlock?
     @State private var editingEntry: TimeEntry?
     @State private var editingSession: WorkSession?
+    @State private var pendingDelete: TimelineBlock?
+    @State private var writeError: String?
     /// The block being swept out. A reference the timeline itself never reads,
     /// so a creation drag redraws the ghost and nothing else.
     @State private var draft = TimelineDraft()
@@ -109,6 +111,18 @@ struct DayTimelineView: View {
             editingEntry = entry
             model.pendingBlockEdit = nil
         }
+        .onExitCommand(perform: closeInspector)
+        .confirmationDialog("Delete this block?", isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let block = pendingDelete { delete(block) }
+                pendingDelete = nil
+            }
+        } message: { Text("This removes the recorded block. Linked Log entries and project notes are kept.") }
+        .alert("Couldn’t save timeline", isPresented: Binding(
+            get: { writeError != nil }, set: { if !$0 { writeError = nil } }
+        )) { Button("OK", role: .cancel) {} } message: { Text(writeError ?? "") }
         .overlay(alignment: .bottom) {
             // Deliberately not `blocks.isEmpty`, which would merge the day's
             // activity a second time on every pass just to ask whether there
@@ -157,7 +171,16 @@ struct DayTimelineView: View {
                         let moment = geometry.date(for: point.y)
                         hoveredRail = ribbons.first { $0.start <= moment && moment <= $0.end }
                     }
-
+                    .gesture(SpatialTapGesture(coordinateSpace: .named(TimelineSpace.track)).onEnded { value in
+                        let moment = geometry.date(for: value.location.y)
+                        guard let block = ribbons.first(where: { $0.start <= moment && moment < $0.end }) else { return }
+                        closeInspector()
+                        inspectorY = value.location.y
+                        selection = block
+                    })
+                    .accessibilityIdentifier("timeline.activityRail")
+                // The rail has useful detail too; a click should keep it open
+                // instead of requiring the pointer to stay perfectly still.
                 if let hoveredRail {
                     railReadout(hoveredRail)
                         .offset(x: Self.railWidth + 6,
@@ -184,6 +207,12 @@ struct DayTimelineView: View {
                         onMove: { delta in move(placed.block, by: delta) },
                         onResize: { edge, moment in resize(placed.block, edge: edge, to: moment) }
                     )
+                    .contextMenu {
+                        Button(entry(for: placed.block) != nil || session(for: placed.block) != nil ? "Edit…" : "Show Details…") { open(placed) }
+                        if entry(for: placed.block) != nil || session(for: placed.block) != nil || breakRecord(for: placed.block) != nil {
+                            Button("Delete…", role: .destructive) { pendingDelete = placed.block }
+                        }
+                    }
                 }
 
                 DraftGhost(geometry: geometry, laneX: laneX, laneWidth: laneWidth, draft: draft)
@@ -196,11 +225,7 @@ struct DayTimelineView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .frame(width: proxy.size.width, height: geometry.totalHeight)
-                        .onTapGesture {
-                            editingEntry = nil
-                            editingSession = nil
-                            selection = nil
-                        }
+                        .onTapGesture(perform: closeInspector)
                         .zIndex(9)
                 }
 
@@ -227,7 +252,13 @@ struct DayTimelineView: View {
     private func create(from start: Date, to end: Date) {
         let entry = TimeEntry(title: "", category: "", startedAt: start, endedAt: end)
         context.insert(entry)
-        try? context.save()
+        do { try context.save() }
+        catch {
+            context.rollback()
+            draft.range = nil
+            writeError = error.localizedDescription
+            return
+        }
         draft.awaiting = entry.id
         inspectorY = geometry.y(for: start)
         selection = nil
@@ -239,6 +270,29 @@ struct DayTimelineView: View {
     func addBlockAtNow() {
         let start = geometry.snapped(.now)
         create(from: start, to: start.addingTimeInterval(30 * 60))
+    }
+
+    private func closeInspector() {
+        editingEntry = nil
+        editingSession = nil
+        selection = nil
+    }
+
+    private func delete(_ block: TimelineBlock) {
+        do {
+            if let entry = entry(for: block) {
+                context.delete(entry)
+                try context.save()
+            } else if let session = session(for: block) {
+                try model.deleteSession(session)
+            } else if let record = breakRecord(for: block) {
+                model.deleteBreak(record)
+            }
+            closeInspector()
+        } catch {
+            context.rollback()
+            writeError = error.localizedDescription
+        }
     }
 
     // MARK: - Cards
@@ -287,40 +341,46 @@ struct DayTimelineView: View {
     @ViewBuilder
     private func inspector(laneX: CGFloat, laneWidth: CGFloat, trackWidth: CGFloat) -> some View {
         if editingEntry != nil || editingSession != nil || selection != nil {
-            let panelWidth: CGFloat = 300
+            let panelWidth = min(CGFloat(300), max(1, trackWidth - 8))
             // Sits beside the lane where there is room, and tucks inside the
             // track when the pane is narrow.
             let x = min(max(laneX + Theme.Space.s, 0), max(0, trackWidth - panelWidth - 4))
             // Clamped against the panel's own measured height rather than the
             // 260 points once assumed here.
-            let y = geometry.panelTop(anchoredAt: inspectorY, height: inspectorHeight)
+            let visible = scroller.visibleDayRange
+            let availableHeight = visible.map { max(120, $0.upperBound - $0.lowerBound - 16) } ?? geometry.totalHeight
+            let shownHeight = min(inspectorHeight, availableHeight)
+            let y = geometry.panelTop(anchoredAt: inspectorY, height: shownHeight, visibleRange: visible)
 
-            Group {
-                if let entry = editingEntry {
-                    TimeEntryEditor(entry: entry) { editingEntry = nil }
-                } else if let session = editingSession {
-                    SessionEditor(session: session, model: model) { editingSession = nil }
-                } else if let block = selection {
-                    if let record = breakRecord(for: block) {
-                        TimelineBlockDetail(block: block, onDelete: {
-                            selection = nil
-                            model.deleteBreak(record)
-                        }, onClose: { selection = nil })
-                    } else {
-                        TimelineBlockDetail(block: block) { selection = nil }
+            ScrollView {
+                Group {
+                    if let entry = editingEntry {
+                        TimeEntryEditor(entry: entry, width: panelWidth) { editingEntry = nil }
+                    } else if let session = editingSession {
+                        SessionEditor(session: session, model: model, width: panelWidth) { editingSession = nil }
+                    } else if let block = selection {
+                        if let record = breakRecord(for: block) {
+                            TimelineBlockDetail(block: block, onDelete: {
+                                selection = nil
+                                model.deleteBreak(record)
+                            }, onClose: { selection = nil })
+                        } else {
+                            TimelineBlockDetail(block: block) { selection = nil }
+                        }
+                    }
+                }
+                .frame(width: panelWidth, alignment: .topLeading)
+                .background {
+                    GeometryReader { panel in
+                        Color.clear
+                            .onChange(of: panel.size.height, initial: true) { _, height in
+                                guard height > 0 else { return }
+                                inspectorHeight = height
+                            }
                     }
                 }
             }
-            .frame(width: panelWidth, alignment: .topLeading)
-            .background {
-                GeometryReader { panel in
-                    Color.clear
-                        .onChange(of: panel.size.height, initial: true) { _, height in
-                            guard height > 0 else { return }
-                            inspectorHeight = height
-                        }
-                }
-            }
+            .frame(width: panelWidth, height: shownHeight)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.panel))
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.panel)
@@ -431,7 +491,7 @@ struct DayTimelineView: View {
     /// Shown only on a genuinely empty day — the one place the drag gesture is
     /// worth spelling out, since nothing on screen implies it.
     private var emptyHint: some View {
-        Text("Drag anywhere on the timeline to add a block")
+        Text("Double-click or drag empty timeline space to add a block")
             .font(Theme.Font.caption)
             .foregroundStyle(Theme.tertiaryLabel)
             .padding(.horizontal, Theme.Space.m)
@@ -802,12 +862,25 @@ private struct CreationLayer: View {
 
     @State private var tracker = DragTracker()
     @State private var anchor: CGFloat = 0
+    @State private var pointerY: CGFloat = 0
 
     var body: some View {
         Color.clear
             .contentShape(Rectangle())
             .frame(width: laneWidth, height: geometry.totalHeight)
             .offset(x: laneX)
+            .accessibilityIdentifier("timeline.emptyLane")
+            .help("Double-click to add a block, or drag to choose its length")
+            .onContinuousHover { phase in
+                if case .active(let point) = phase { pointerY = point.y }
+            }
+            .contextMenu {
+                Button("Add Block Here") { create(at: pointerY) }
+            }
+            .simultaneousGesture(
+                SpatialTapGesture(count: 2, coordinateSpace: .named(TimelineSpace.track))
+                    .onEnded { create(at: $0.location.y) }
+            )
             .gesture(
                 DragGesture(minimumDistance: 3, coordinateSpace: .named(TimelineSpace.track))
                     .onChanged { value in
@@ -827,15 +900,22 @@ private struct CreationLayer: View {
                         guard let range = draft.range else { return }
                         // A flick that collapses to nothing still means "a block
                         // here", so it gets a sensible default length.
-                        let upper = range.upper > range.lower
-                            ? range.upper
-                            : range.lower.addingTimeInterval(30 * 60)
+                        let fallback = geometry.newBlockRange(at: geometry.y(for: range.lower))
+                        let lower = range.upper > range.lower ? range.lower : fallback.start
+                        let upper = range.upper > range.lower ? range.upper : fallback.end
                         // Left on screen, at the size it will be created at,
                         // until the card replaces it.
-                        draft.range = DraftRange(anchor: range.lower, current: upper)
-                        onCreate(range.lower, upper)
+                        draft.range = DraftRange(anchor: lower, current: upper)
+                        onCreate(lower, upper)
                     }
             )
+    }
+
+    private func create(at y: CGFloat) {
+        scroller.stop()
+        let range = geometry.newBlockRange(at: y)
+        draft.range = DraftRange(anchor: range.start, current: range.end)
+        onCreate(range.start, range.end)
     }
 
     /// The same minute grid the cards move on, so the ghost and the block it
@@ -1164,7 +1244,10 @@ private struct LaneCard: View {
             .contentShape(Rectangle())
             .padding(.vertical, handleHeight)
             .accessibilityIdentifier("timeline.card.\(placed.block.id)")
+            .onTapGesture(count: 2, perform: onTap)
             .onTapGesture(perform: onTap)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onTap() }
             .gesture(moveGesture, including: isMovable ? .all : .none)
     }
 

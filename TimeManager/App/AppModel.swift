@@ -370,6 +370,35 @@ final class AppModel {
         return session
     }
 
+    /// Deleting work is different from finishing it: no review or break offer
+    /// is due, and every surface must stop showing its timer immediately.
+    func deleteSession(_ session: WorkSession) throws {
+        guard context.container.configurations.allSatisfy(\.allowsSave) else {
+            throw CocoaError(.fileWriteNoPermission)
+        }
+        let id = session.id
+        let wasActive = activeSession?.id == id
+        let wasPending = pendingReflection?.id == id
+        if wasActive { NotificationService.cancelReminder(for: session) }
+        context.delete(session)
+        do { try context.save() }
+        catch {
+            context.rollback()
+            if wasActive, session.status == .active { NotificationService.scheduleEndReminder(for: session) }
+            throw error
+        }
+        if wasActive {
+            activeSession = nil
+            // An existing break can carry on, but no longer has work to resume.
+            sessionPausedForBreak = false
+        }
+        if wasPending {
+            pendingReflection = nil
+            offersBreakAfterReview = false
+        }
+        refreshStats()
+    }
+
     /// Ends a session that has run the time it was given, on the minute it was
     /// due rather than whenever the next tick happens to land.
     func finishAtPlannedEndIfDue(at date: Date = .now) {

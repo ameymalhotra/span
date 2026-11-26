@@ -152,4 +152,57 @@ struct LogIntegrationTests {
             #expect(entry?.tab?.id == other.id)
         }
     }
+
+    @Test("deleting active work immediately clears the timer and preserves linked writing")
+    func deleteActiveSession() throws {
+        try withModel { model, context, _ in
+            let tab = try #require(try LogBook.createTab(name: "Research", in: context))
+            let note = try NoteBook.create(in: tab, context: context)
+            let session = try #require(model.startSession(title: "Read", category: "Work", minutes: 25, logTabID: tab.id))
+            let id = session.id
+            let entry = try #require(try model.saveLogDraft(LogDraft(tabID: tab.id, resumePoint: "Continue", noteIDs: [note.id]), session: session))
+            try model.deleteSession(session)
+            #expect(model.activeSession == nil)
+            #expect(model.sessionClock == "00:00")
+            #expect(model.pendingReflection == nil)
+            #expect(!model.offersBreakAfterReview)
+            #expect(try context.fetch(FetchDescriptor<WorkSession>()).isEmpty)
+            #expect(entry.sessionID == id)
+            #expect(entry.sessionTitle == "Read")
+            #expect(entry.notes.first?.id == note.id)
+        }
+    }
+
+    @Test("deleting a completed session leaves other running work alone")
+    func deletePastSession() throws {
+        try withModel { model, context, _ in
+            let past = try #require(model.startSession(title: "Past", category: "Work", minutes: 25))
+            model.finishSession()
+            let current = try #require(model.startSession(title: "Current", category: "Work", minutes: 25))
+            try model.deleteSession(past)
+            #expect(model.activeSession?.id == current.id)
+            #expect(model.pendingReflection == nil)
+            #expect(!model.offersBreakAfterReview)
+            #expect(try context.fetch(FetchDescriptor<WorkSession>()).count == 1)
+            model.finishSession()
+        }
+    }
+
+    @Test("deleting paused work leaves its break as a standalone timer")
+    func deletePausedSessionDuringBreak() throws {
+        try withModel { model, context, _ in
+            let session = try #require(model.startSession(title: "Read", category: "Work", minutes: 25))
+            model.startBreak(minutes: 5)
+            #expect(model.sessionPausedForBreak)
+            try model.deleteSession(session)
+            #expect(model.activeSession == nil)
+            #expect(model.isOnBreak)
+            #expect(!model.sessionPausedForBreak)
+            model.endBreak()
+            #expect(model.activeSession == nil)
+            #expect(!model.isOnBreak)
+            #expect(try context.fetch(FetchDescriptor<WorkSession>()).isEmpty)
+        }
+    }
+
 }
